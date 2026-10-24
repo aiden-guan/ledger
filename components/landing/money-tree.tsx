@@ -151,6 +151,8 @@ export function MoneyTree({ data }: { data: LandingData }) {
 
     // What is in focus (hovered, or opened), and how far the rest has faded back.
     let hover = { key: "", part: -1 };
+    // When the current pulse started (performance.now()), or 0 for none.
+    let pulse = 0;
     let focus = 0;
     let focusPart = -1;
 
@@ -243,7 +245,7 @@ export function MoneyTree({ data }: { data: LandingData }) {
           gpart[i] = part;
         }
       };
-      const lay = (d: Dot, age: number) => {
+      const lay = (d: Dot, age: number, ink: number = d.ink) => {
         let x = X(d.x);
         let y = Y(d.y);
         if (y < -8 || y > vh + 8 || x < -8 || x > vw + 8) return;
@@ -260,15 +262,34 @@ export function MoneyTree({ data }: { data: LandingData }) {
         const rc = (d.r * s * (0.55 + 0.45 * age)) / cell;
         const cx = Math.floor(x / cell);
         const cy = Math.floor(y / cell);
-        if (rc < 0.85) put(cx, cy, d.ink, d.part);
+        if (rc < 0.85) put(cx, cy, ink, d.part);
         else {
           const r = Math.ceil(rc);
           const r2 = rc * rc;
-          for (let oy2 = -r; oy2 <= r; oy2++) for (let ox2 = -r; ox2 <= r; ox2++) if (ox2 * ox2 + oy2 * oy2 <= r2) put(cx + ox2, cy + oy2, d.ink, d.part);
+          for (let oy2 = -r; oy2 <= r; oy2++) for (let ox2 = -r; ox2 <= r; ox2++) if (ox2 * ox2 + oy2 * oy2 <= r2) put(cx + ox2, cy + oy2, ink, d.part);
         }
       };
       const n = visibleCount(tree.dots, g);
-      for (let i = 0; i < n; i++) lay(tree.dots[i], clamp01((g - tree.dots[i].t) / 0.01));
+      // Now and then a pulse runs in from the root tips, up the trunk and out to the findings: the
+      // books being read. It is blue until it reaches a finding, then orange.
+      let tipward = -1;
+      let upward = -1;
+      if (pulse) {
+        const u = (now - pulse) / 2200;
+        if (u >= 1) pulse = 0;
+        else {
+          request();
+          if (u < 0.3) tipward = START * (1 - u / 0.3);
+          else upward = START + ((u - 0.3) / 0.7) * (g - START + 0.03);
+        }
+      }
+      for (let i = 0; i < n; i++) {
+        const d = tree.dots[i];
+        let ink: number = d.ink;
+        if (tipward >= 0 ? d.part >= PART.root(0) && Math.abs(d.t - tipward) < 0.007 : upward >= 0 && d.part < PART.root(0) && Math.abs(d.t - upward) < 0.012)
+          ink = d.part < PART.trunk ? INK.fruit : INK.moss;
+        lay(d, clamp01((g - d.t) / 0.01), ink);
+      }
       if (opened?.twigs) {
         const m = visibleCount(opened.twigs, opened.p);
         for (let i = 0; i < m; i++) lay(opened.twigs[i], 1);
@@ -316,8 +337,10 @@ export function MoneyTree({ data }: { data: LandingData }) {
       for (const node of nodes) {
         const el = nodeEls.current[node.key];
         if (!el) continue;
-        const vis = smooth(node.at, node.at + 0.025, g);
+        let vis = smooth(node.at, node.at + 0.025, g);
         if (vis > 0.5) cents += node.cents ?? 0;
+        // Where the closing line shares the bottom of the screen with the roots, it wins.
+        if (vw < 1100 && node.part >= PART.root(0)) vis *= 1 - smooth(CLOCK.yield, CLOCK.yield + 0.04, g);
         const ax = X(node.anchor.x);
         const ay = Y(node.anchor.y);
         const left = node.side === "left";
@@ -528,6 +551,16 @@ export function MoneyTree({ data }: { data: LandingData }) {
       };
       introFrame = requestAnimationFrame(tick);
     }
+    // A pulse every few seconds while the tree is on screen and nothing is open.
+    const pulses = still
+      ? 0
+      : window.setInterval(() => {
+          const r = sec.getBoundingClientRect();
+          if (document.visibilityState !== "visible" || opened || pulse || r.bottom < 0 || r.top > window.innerHeight) return;
+          pulse = performance.now();
+          lastTime = pulse;
+          request();
+        }, 6000);
 
     const ro = new ResizeObserver(measure);
     ro.observe(st);
@@ -540,6 +573,7 @@ export function MoneyTree({ data }: { data: LandingData }) {
     return () => {
       cancelAnimationFrame(frame);
       cancelAnimationFrame(introFrame);
+      window.clearInterval(pulses);
       ro.disconnect();
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("keydown", onKey);
@@ -673,7 +707,7 @@ export function MoneyTree({ data }: { data: LandingData }) {
                 }}
                 className="flex items-center justify-end gap-2.5 font-mono text-[10.5px] text-faint transition-colors hover:text-foreground group-data-[on=true]:text-foreground"
               >
-                <span className="opacity-0 transition-opacity group-hover:opacity-100 group-data-[on=true]:opacity-100">{c.name}</span>
+                <span className="opacity-0 transition-opacity group-hover:opacity-100">{c.name}</span>
                 <span className="h-px w-3 bg-current transition-[width] group-data-[on=true]:w-6 group-data-[on=true]:bg-signal" />
               </button>
             </li>
