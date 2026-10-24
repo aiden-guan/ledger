@@ -1,8 +1,11 @@
-import { query } from "./_generated/server";
+import { action } from "./_generated/server";
 import { getEnv } from "../lib/env";
 
-/** Configuration state for the health check. Reports whether keys are set, never their values. */
-export const status = query({
+/**
+ * Configuration state for the health check. Reports whether keys are set, never their values.
+ * An action rather than a query: query results are cached, and an env change would not show.
+ */
+export const status = action({
   args: {},
   handler: async () => {
     const env = getEnv();
