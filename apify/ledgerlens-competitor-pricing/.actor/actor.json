@@ -1,0 +1,22 @@
+{
+  "actorSpecification": 1,
+  "name": "ledgerlens-competitor-pricing",
+  "title": "LedgerLens Competitor Pricing",
+  "description": "Visits competitor product pages and extracts the current price, currency, availability and product title into a dataset.",
+  "version": "1.0",
+  "buildTag": "latest",
+  "input": "./input_schema.json",
+  "dockerfile": "../Dockerfile",
+  "storages": {
+    "dataset": {
+      "actorSpecification": 1,
+      "views": {
+        "overview": {
+          "title": "Competitor prices",
+          "transformation": { "fields": ["internalProductId", "competitor", "productName", "price", "currency", "availability", "url", "capturedAt"] },
+          "display": { "component": "table" }
+        }
+      }
+    }
+  }
+}

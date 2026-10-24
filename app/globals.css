@@ -1,0 +1,200 @@
+@import "tailwindcss";
+
+/*
+ * LedgerLens: an instrument, not a landing page. Paper and ink, hairline rules, monospace
+ * for anything measured, and one signal color reserved for money that is leaking.
+ */
+:root {
+  --background: oklch(0.985 0.002 270);
+  --foreground: oklch(0.17 0.004 270);
+  --card: oklch(1 0 0);
+  --card-foreground: var(--foreground);
+  --muted: oklch(0.955 0.003 270);
+  --muted-foreground: oklch(0.5 0.008 270);
+  --faint: oklch(0.72 0.006 270);
+  --border: oklch(0.17 0.004 270 / 0.1);
+  --border-strong: oklch(0.17 0.004 270 / 0.22);
+  --input: var(--border-strong);
+  --ring: var(--foreground);
+  --primary: var(--foreground);
+  --primary-foreground: var(--background);
+  --secondary: var(--muted);
+  --secondary-foreground: var(--foreground);
+  --signal: oklch(0.64 0.215 36);
+  --signal-soft: oklch(0.64 0.215 36 / 0.09);
+  --positive: oklch(0.52 0.12 152);
+  --positive-soft: oklch(0.52 0.12 152 / 0.09);
+  --negative: var(--signal);
+  --negative-soft: var(--signal-soft);
+  --warning: oklch(0.68 0.14 75);
+  --warning-soft: oklch(0.68 0.14 75 / 0.1);
+  --accent: var(--signal);
+  --radius: 2px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: oklch(0.145 0.003 270);
+    --foreground: oklch(0.93 0.003 270);
+    --card: oklch(0.17 0.003 270);
+    --muted: oklch(0.2 0.003 270);
+    --muted-foreground: oklch(0.66 0.006 270);
+    --faint: oklch(0.45 0.006 270);
+    --border: oklch(0.93 0.003 270 / 0.1);
+    --border-strong: oklch(0.93 0.003 270 / 0.24);
+    --signal: oklch(0.7 0.19 40);
+    --signal-soft: oklch(0.7 0.19 40 / 0.12);
+    --positive: oklch(0.72 0.14 152);
+    --positive-soft: oklch(0.72 0.14 152 / 0.12);
+    --warning: oklch(0.78 0.13 80);
+    --warning-soft: oklch(0.78 0.13 80 / 0.12);
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-faint: var(--faint);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-signal: var(--signal);
+  --color-signal-soft: var(--signal-soft);
+  --color-positive: var(--positive);
+  --color-positive-soft: var(--positive-soft);
+  --color-negative: var(--negative);
+  --color-negative-soft: var(--negative-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-accent: var(--accent);
+  --radius-sm: 1px;
+  --radius-md: 2px;
+  --radius-lg: 2px;
+  --radius-xl: 3px;
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  html {
+    background: var(--background);
+  }
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-feature-settings: "ss01", "cv11";
+  }
+  ::selection {
+    background: var(--foreground);
+    color: var(--background);
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Small uppercase mono label used for section numbers, keys and metadata. */
+.label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+/* A framed panel whose title sits in the top rule, like a terminal window or a spec sheet. */
+.frame {
+  position: relative;
+  border: 1px solid var(--border-strong);
+  background: var(--card);
+}
+.frame-title {
+  position: absolute;
+  top: -0.6rem;
+  left: 0.75rem;
+  padding: 0 0.4rem;
+  background: var(--background);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+/* Blueprint grid used behind the hero. */
+.grid-paper {
+  background-image:
+    linear-gradient(to right, var(--border) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--border) 1px, transparent 1px);
+  background-size: 24px 24px;
+  mask-image: linear-gradient(to bottom, black 30%, transparent);
+}
+
+/* Leader dots between a label and its value. */
+.leader {
+  flex: 1;
+  min-width: 1rem;
+  border-bottom: 1px dotted var(--border-strong);
+  transform: translateY(-0.3em);
+}
+
+@keyframes ll-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes ll-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes ll-stamp {
+  0% {
+    opacity: 0;
+    transform: scale(1.03);
+    clip-path: inset(0 100% 0 0);
+  }
+  60% {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.animate-stamp {
+  animation: ll-stamp 520ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.animate-fade-up {
+  animation: ll-fade-up 280ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.cursor-blink {
+  animation: ll-blink 1s steps(1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up,
+  .animate-stamp,
+  .cursor-blink {
+    animation: none;
+  }
+}

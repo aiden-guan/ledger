@@ -1,0 +1,138 @@
+import { AppHeader } from "@/components/layout/app-header";
+import { SiteFooter } from "@/components/layout/site-footer";
+import { FindingCard } from "@/components/findings/finding-card";
+import { RevenueChart } from "@/components/dashboard/revenue-chart";
+import { InvestigationStage } from "@/components/investigation/investigation-stage";
+import { SeedDemoPanel, SystemErrorPanel } from "@/components/dashboard/empty-states";
+import { RelativeTime } from "@/components/financial/relative-time";
+import { getDashboardData, type DashboardData } from "@/lib/db/queries/dashboard";
+import { getCurrentOrganization } from "@/lib/db/queries/organization";
+import { getEnv } from "@/lib/env";
+import { format } from "@/lib/finance/money";
+import { logger } from "@/lib/utils/logger";
+
+export const dynamic = "force-dynamic";
+
+async function load(): Promise<{ data: DashboardData | null; error: string | null; demoMode: boolean }> {
+  let demoMode = true;
+  try {
+    demoMode = getEnv().DEMO_MODE;
+    const org = await getCurrentOrganization();
+    if (!org) return { data: null, error: null, demoMode };
+    return { data: await getDashboardData(org), error: null, demoMode };
+  } catch (error) {
+    logger.error("dashboard_load_failed", { error: error instanceof Error ? error.message : String(error) });
+    return { data: null, error: error instanceof Error ? error.message : "Unknown error", demoMode };
+  }
+}
+
+export default async function DashboardPage() {
+  const { data, error, demoMode } = await load();
+
+  if (error) {
+    return (
+      <>
+        <AppHeader demoMode={false} />
+        <SystemErrorPanel />
+      </>
+    );
+  }
+  if (!data) {
+    return (
+      <>
+        <AppHeader demoMode={demoMode} />
+        <SeedDemoPanel demoMode={demoMode} />
+      </>
+    );
+  }
+
+  const { latest, findings, overview, organization } = data;
+  const revenueChange = overview.revenuePrior30Cents ? ((overview.revenue30Cents - overview.revenuePrior30Cents) / overview.revenuePrior30Cents) * 100 : 0;
+
+  return (
+    <>
+      <AppHeader organizationName={organization.name} demoMode={demoMode} />
+      <main className="mx-auto max-w-6xl px-4 pt-12 sm:px-6 sm:pt-16">
+        {data.lastFailure && (
+          <p className="mb-6 border border-signal/40 px-4 py-3 font-mono text-[12px] text-signal">
+            The most recent investigation did not finish: {data.lastFailure.message ?? "unknown error"}. Results below are from the last completed run.
+          </p>
+        )}
+
+        <InvestigationStage
+          organizationName={organization.name}
+          activeInvestigationId={data.activeInvestigationId}
+          river={data.river}
+          findings={findings}
+          hasInvestigation={Boolean(latest)}
+        />
+
+        <section className="mt-16 grid gap-12 lg:grid-cols-[minmax(0,1fr)_300px]">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-baseline justify-between gap-2 border-b pb-3">
+              <p className="label">
+                <span className="text-foreground">02</span> &nbsp;leaks traced
+              </p>
+              {latest?.completedAt && (
+                <p className="label normal-case tracking-normal">
+                  investigated <RelativeTime iso={latest.completedAt} />
+                  {latest.stats && ` · ${latest.stats.transactions} transactions · ${latest.stats.sales} orders · ${latest.stats.competitorListings} competitor pages`}
+                </p>
+              )}
+            </div>
+            {findings.length === 0 && (
+              <p className="border-b py-10 text-center font-mono text-[13px] text-muted-foreground">
+                {latest ? "no leaks found in the last investigation." : "run an investigation to trace where money is leaking."}
+              </p>
+            )}
+            {findings.map((f, i) => (
+              <FindingCard key={f.id} finding={f} index={i} />
+            ))}
+            {latest && (
+              <dl className="mt-6 grid gap-1 font-mono text-[11px] text-muted-foreground sm:grid-cols-3">
+                <div>
+                  <dt className="inline text-faint">market data · </dt>
+                  <dd className="inline">{latest.externalIntelMode !== "live" ? "demo dataset" : latest.externalIntelSandbox ? "apify crawl of demo storefront" : "live via apify"}</dd>
+                </div>
+                <div>
+                  <dt className="inline text-faint">narrative · </dt>
+                  <dd className="inline">{latest.modelExplanations > 0 ? latest.aiModel : "rules-based"}</dd>
+                </div>
+                <div>
+                  <dt className="inline text-faint">money math · </dt>
+                  <dd className="inline">exact cents, deterministic</dd>
+                </div>
+              </dl>
+            )}
+          </div>
+
+          <aside>
+            <p className="label border-b pb-3">
+              <span className="text-foreground">03</span> &nbsp;last 30 days
+            </p>
+            <dl className="mt-4 grid gap-1.5 font-mono text-[13px]">
+              <Stat label="revenue" value={format(overview.revenue30Cents)} note={`${revenueChange >= 0 ? "+" : ""}${revenueChange.toFixed(1)}%`} />
+              <Stat label="gross margin" value={`${overview.grossMargin30Pct.toFixed(1)}%`} />
+              <Stat label="orders" value={String(overview.orders30)} />
+            </dl>
+            <div className="mt-6">
+              <RevenueChart months={overview.months} />
+            </div>
+          </aside>
+        </section>
+      </main>
+      <SiteFooter />
+    </>
+  );
+}
+
+function Stat({ label, value, note }: { label: string; value: string; note?: string }) {
+  return (
+    <div className="flex items-baseline gap-2">
+      <dt className="text-muted-foreground">{label}</dt>
+      <span className="leader" />
+      {note && <span className="tabular text-[11px] text-faint">{note}</span>}
+      <dd className="tabular">{value}</dd>
+    </div>
+  );
+}

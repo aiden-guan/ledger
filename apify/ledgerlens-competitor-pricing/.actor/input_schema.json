@@ -1,0 +1,25 @@
+{
+  "title": "LedgerLens competitor pricing input",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "products": {
+      "title": "Competitor product pages",
+      "type": "array",
+      "description": "Pages to visit. Each item: { internalProductId, competitor, url }.",
+      "editor": "json",
+      "prefill": [
+        { "internalProductId": "demo-product", "competitor": "Ridgeline Supply Co.", "url": "https://example.com/product" }
+      ]
+    },
+    "maxConcurrency": {
+      "title": "Max concurrency",
+      "type": "integer",
+      "description": "Parallel page loads.",
+      "default": 5,
+      "minimum": 1,
+      "maximum": 20
+    }
+  },
+  "required": ["products"]
+}

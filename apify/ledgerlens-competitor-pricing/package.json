@@ -1,0 +1,17 @@
+{
+  "name": "ledgerlens-competitor-pricing",
+  "version": "1.0.0",
+  "description": "Apify Actor that extracts current prices from competitor product pages for LedgerLens.",
+  "type": "module",
+  "private": true,
+  "engines": { "node": ">=20" },
+  "main": "src/main.js",
+  "scripts": {
+    "start": "node src/main.js"
+  },
+  "dependencies": {
+    "apify": "^3.4.0",
+    "cheerio": "^1.0.0",
+    "crawlee": "^3.13.0"
+  }
+}
