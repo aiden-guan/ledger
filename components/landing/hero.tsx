@@ -1,115 +1,74 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { ArrowDown, ArrowRight } from "lucide-react";
+import { useCallback, useRef } from "react";
+import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { LandingData } from "@/lib/landing/data";
-import { cn } from "@/lib/utils/cn";
-import { Rosette } from "./rosette";
-
-const LINES = ["Find the money", "your business", "is quietly losing."];
+import { QuadtreeField } from "./quadtree-field";
+import { Caption } from "./section";
 
 export function Hero({ data }: { data: LandingData }) {
-  const [active, setActive] = useState<number | null>(null);
-  const [focus, setFocus] = useState<number | null>(null);
-  const lit = focus ?? active;
+  const out = useRef<Record<string, HTMLElement | null>>({});
+  // The readout ticks with the animation; written straight to the DOM to avoid a render per frame.
+  const onProgress = useCallback((p: { records: number; cells: number; depth: number; found: number }) => {
+    const o = out.current;
+    if (o.records) o.records.textContent = p.records.toLocaleString("en-US");
+    if (o.cells) o.cells.textContent = String(p.cells);
+    if (o.depth) o.depth.textContent = String(p.depth);
+    if (o.found) o.found.textContent = String(p.found);
+  }, []);
 
   return (
-    <section className="mx-auto grid max-w-6xl gap-x-12 gap-y-8 px-4 pb-16 pt-10 sm:px-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:pb-24 lg:pt-16">
-      <div className="lg:col-start-1 lg:row-start-1">
-        <p className="label animate-fade">An autonomous financial investigator</p>
-        <h1 className="display mt-5 text-[clamp(2.6rem,5.2vw,4.7rem)] font-medium leading-[0.98] tracking-[-0.03em]">
-          {LINES.map((line, i) => (
-            <span key={line} className="rise-slot">
-              <span style={{ animationDelay: `${120 + i * 110}ms` }}>
-                {i === 2 ? (
-                  <>
-                    is <em className="font-normal italic">quietly</em> losing.
-                  </>
-                ) : (
-                  line
-                )}
+    <header className="mx-auto max-w-6xl px-4 pt-14 sm:px-6 sm:pt-20">
+      <div>
+        <h1 className="display text-[clamp(2rem,7.6vw,6.4rem)] leading-[0.94] tracking-[-0.05em]">
+          <span className="rise-slot">
+            <span>Find the leak.</span>
+          </span>
+          <span className="rise-slot text-faint">
+            <span style={{ animationDelay: "120ms" }}>Prove it to the cent.</span>
+          </span>
+        </h1>
+        <div className="animate-fade mt-10 flex flex-wrap items-center justify-between gap-6 [animation-delay:400ms]">
+          <p className="text-[18px] leading-snug text-muted-foreground">An autonomous investigator for small-business books.</p>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild size="lg">
+              <Link href="/overview">
+                Open the demo <ArrowRight />
+              </Link>
+            </Button>
+            <Button asChild size="lg" variant="outline">
+              <a href="#method">How it works</a>
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <figure className="animate-fade mt-14 [animation-delay:250ms] sm:mt-20">
+        <QuadtreeField data={data} onProgress={onProgress} />
+        <Caption
+          n={1}
+          aside={
+            <span className="tabular flex gap-4">
+              <span>
+                records <b ref={(e) => void (out.current.records = e)} className="font-medium text-foreground">0</b>
+              </span>
+              <span className="hidden sm:inline">
+                cells <b ref={(e) => void (out.current.cells = e)} className="font-medium text-foreground">1</b>
+              </span>
+              <span className="hidden sm:inline">
+                depth <b ref={(e) => void (out.current.depth = e)} className="font-medium text-foreground">0</b>
+              </span>
+              <span>
+                leaks <b ref={(e) => void (out.current.found = e)} className="font-medium text-signal">0</b>
               </span>
             </span>
-          ))}
-        </h1>
-        <p className="animate-fade mt-6 max-w-[34rem] text-[17px] leading-relaxed text-muted-foreground [animation-delay:500ms]">
-          LedgerLens reads every line of your books, checks your prices against the market, and proves each leak with the receipts. Nothing changes until you approve it.
-        </p>
-      </div>
-
-      <div className="relative lg:col-start-2 lg:row-span-3 lg:row-start-1 lg:self-center">
-        <div className="mb-2 flex justify-between font-mono text-[10px] uppercase tracking-[0.12em] lg:mb-0">
-          <p className="text-muted-foreground">series 2026</p>
-          <p className="text-signal">LL {String(Math.round(data.totalCents / 100)).padStart(6, "0")} A</p>
-        </div>
-        <Rosette leaks={data.leaks} ledger={data.ledger} focus={focus} onActiveChange={setActive} />
-        <p className="mt-2 text-center font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-          <span className="hidden sm:inline">Move the loupe. </span>The microprint is the demo company&apos;s real ledger.
-        </p>
-      </div>
-
-      <div className="animate-fade [animation-delay:700ms] lg:col-start-1 lg:row-start-2">
-        <div className="flex items-baseline justify-between border-b border-border-strong pb-2">
-          <span className="label">Found in the demo books</span>
-          <span className="font-mono text-[11px] text-muted-foreground">
-            {data.stats.days} days · {(data.stats.sales + data.stats.transactions).toLocaleString("en-US")} records
-          </span>
-        </div>
-        <ul onMouseLeave={() => setFocus(null)}>
-          {data.leaks.map((leak, i) => (
-            <li key={leak.n}>
-              <button
-                type="button"
-                onMouseEnter={() => setFocus(i)}
-                onFocus={() => setFocus(i)}
-                onBlur={() => setFocus(null)}
-                onClick={() => setFocus(i)}
-                className="group flex w-full items-baseline gap-3 border-b border-border py-2.5 text-left outline-none"
-              >
-                <span
-                  className={cn(
-                    "w-7 shrink-0 text-center font-mono text-[11px] tabular transition-colors",
-                    lit === i ? "bg-signal text-background" : "text-signal",
-                  )}
-                >
-                  {leak.n}
-                </span>
-                <span className="text-[15px]">{leak.kind}</span>
-                <span className="hidden truncate text-[13px] text-muted-foreground sm:inline">{leak.subject}</span>
-                <span className="leader" />
-                <span className={cn("font-mono text-[13px] tabular transition-colors", lit === i ? "text-signal" : "text-foreground")}>
-                  {leak.amount}
-                  <span className="text-muted-foreground"> {leak.per === "once" ? "once" : "/yr"}</span>
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-        <div className="flex items-end justify-between gap-4 pt-4">
-          <div>
-            <p className="label">Recoverable</p>
-            <p className="mt-1 font-mono text-[11px] text-muted-foreground">
-              {data.recurringAnnual} a year, plus {data.oneTime} once
-            </p>
-          </div>
-          <p className="display figure text-[44px] leading-none text-signal tabular">{data.totalAnnual}</p>
-        </div>
-      </div>
-
-      <div className="animate-fade flex flex-wrap gap-3 [animation-delay:850ms] lg:col-start-1 lg:row-start-3">
-        <Button asChild size="lg">
-          <Link href="/overview">
-            Open the case files <ArrowRight />
-          </Link>
-        </Button>
-        <Button asChild size="lg" variant="outline">
-          <a href="#how">
-            How it works <ArrowDown />
-          </a>
-        </Button>
-      </div>
-    </section>
+          }
+        >
+          {data.stats.days} days of Acme Outdoor Co. <span className="hidden md:inline">Hover a cell.</span>
+        </Caption>
+      </figure>
+    </header>
   );
 }

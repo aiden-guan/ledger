@@ -2,8 +2,8 @@ import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils/cn";
 
-/** Bracketed mono status tag, e.g. [awaiting approval]. */
-const badgeVariants = cva("inline-flex items-center whitespace-nowrap font-mono text-[11px] leading-none tracking-[0.02em] before:content-['['] after:content-[']']", {
+/** Mono status tag with a leading dot, e.g. ● awaiting approval. */
+const badgeVariants = cva("inline-flex items-center gap-1.5 whitespace-nowrap font-mono text-[11px] leading-none", {
   variants: {
     variant: {
       default: "text-muted-foreground",
@@ -21,7 +21,8 @@ export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement>, Varia
 export function Badge({ className, variant, children, ...props }: BadgeProps) {
   return (
     <span className={cn(badgeVariants({ variant }), className)} {...props}>
-      <span className="px-[0.35em]">{children}</span>
+      <span aria-hidden className="size-[5px] rounded-full bg-current" />
+      {children}
     </span>
   );
 }

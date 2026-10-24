@@ -55,12 +55,11 @@ export function FindingContent({ detail }: { detail: FindingDetail }) {
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-3">
               <span className="label">{FINDING_TYPE_LABELS[finding.findingType]}</span>
-              <Badge variant={sealed ? "positive" : "negative"}>{sealed ? "sealed" : recommendation?.status === "REJECTED" ? "rejected" : "leaking"}</Badge>
+              <Badge variant={sealed ? "positive" : "negative"}>{sealed ? "approved" : recommendation?.status === "REJECTED" ? "rejected" : "leaking"}</Badge>
               <Badge variant={level === "High" ? "positive" : level === "Medium" ? "warning" : "negative"}>{level.toLowerCase()} confidence</Badge>
               {finding.status === "NEEDS_REVIEW" && <Badge variant="warning">evidence did not fully support this finding</Badge>}
             </div>
             <h1 className="display mt-4 text-balance text-[38px] font-medium leading-[1.02] sm:text-[54px]">{finding.title}</h1>
-            <p className="mt-5 max-w-2xl text-[16px] leading-relaxed text-muted-foreground">{finding.summary}</p>
             {sealed && <SealedBanner annualCents={finding.annualImpactCents} oneTime={oneTime} />}
 
             <Section n="01" title="what happened">
@@ -68,8 +67,8 @@ export function FindingContent({ detail }: { detail: FindingDetail }) {
               <p className="mt-3 font-mono text-[11px] text-muted-foreground">
                 {"// "}
                 {finding.narrativeSource === "model"
-                  ? `Explanation written by ${finding.narrativeModel} from the evidence below. Figures come from the deterministic engine.`
-                  : "Rules-based explanation generated from the evidence below (AI narrative unavailable)."}
+                  ? `written by ${finding.narrativeModel}; figures from the engine`
+                  : "rules-based explanation; AI narrative unavailable"}
               </p>
             </Section>
 
@@ -125,7 +124,7 @@ export function FindingContent({ detail }: { detail: FindingDetail }) {
                     </tbody>
                   </table>
                 </div>
-                <p className="mt-2 font-mono text-[11px] text-muted-foreground">{"// "}All money is computed in integer cents by the deterministic engine. The model never performs arithmetic.</p>
+                <p className="mt-2 font-mono text-[11px] text-muted-foreground">{"// "}integer cents, deterministic engine</p>
               </Section>
             )}
 
@@ -184,7 +183,6 @@ export function FindingContent({ detail }: { detail: FindingDetail }) {
               <Frame title="recommended action" className="px-5 pb-5 pt-6">
                 <Badge variant="outline">{ACTION_TYPE_LABELS[recommendation.actionType].toLowerCase()}</Badge>
                 <p className="mt-3 text-[17px] font-medium leading-snug tracking-tight">{recommendation.title}</p>
-                <p className="mt-2 text-sm text-muted-foreground">{recommendation.description}</p>
                 <dl className="mt-4 space-y-2 text-[13px]">
                   <Row
                     k="expected recovery"
@@ -194,7 +192,7 @@ export function FindingContent({ detail }: { detail: FindingDetail }) {
                   <Row k={oneTime ? "type" : "per year"} v={oneTime ? "one-time" : `+${format(recommendation.estimatedAnnualImpactCents, { compact: true })}`} />
                 </dl>
                 <p className="mt-4 text-[13px] leading-relaxed">
-                  <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-muted-foreground">why </span>
+                  <span className="font-mono text-[11px] text-muted-foreground">why </span>
                   {recommendation.reasoning}
                 </p>
 

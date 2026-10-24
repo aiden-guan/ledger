@@ -1,7 +1,6 @@
 import { COMPETITORS, DEMO_DAYS, MARKET_LISTINGS, PRODUCTS } from "@/lib/demo/catalog";
 import { runDemoOffline } from "@/lib/demo/offline-run";
 import { format } from "@/lib/finance/money";
-import type { Fracture } from "@/lib/guilloche";
 
 /*
  * Everything the landing page shows about the demo company, computed at build time by running
@@ -13,10 +12,8 @@ export interface LandingLeak {
   kind: string;
   subject: string;
   amount: string;
-  per: string;
-  fracture: Fracture;
-  /** Microprint that appears under the loupe at this leak. */
-  micro: string;
+  cents: number;
+  once: boolean;
 }
 
 export interface LandingData {
@@ -25,16 +22,20 @@ export interface LandingData {
   recurringAnnual: string;
   oneTime: string;
   totalCents: number;
-  /** Ledger lines for the microprint rings. */
-  ledger: string[];
-  /** Every bank line in date order: bar length from the amount, red where a finding points. */
-  scan: { w: number; hot: boolean }[];
+  /** Every sale and bank line as [x, y, leak]: x is time, y is log amount (top is larger), leak is -1 or an index into leaks. */
+  points: [number, number, number][];
+  /** One short ledger line per point, same order. */
+  labels: string[];
   market: { ours: number; competitors: { name: string; price: number }[]; product: string };
-  duplicate: { vendor: string; invoice: string; amount: string; dates: string[] };
-  stats: { days: number; sales: number; transactions: number; products: number };
+  duplicate: { vendor: string; invoice: string; amount: string; cents: number; dates: string[]; gapDays: number; confidence: string };
+  /** Axis ticks in the same unit coordinates as points. */
+  axes: { x: { at: number; label: string }[]; y: { at: number; label: string }[] };
+  fix: { product: string; from: string; to: string; annual: string };
+  stats: { days: number; sales: number; transactions: number; records: number };
 }
 
 const ANCHOR = new Date("2026-10-24T00:00:00Z");
+const DAY = 86_400_000;
 
 const shortDate = (ms: number) => new Date(ms).toISOString().slice(5, 10);
 const money2 = (cents: number) => format(cents).replace("$", "");
@@ -42,71 +43,92 @@ const money2 = (cents: number) => format(cents).replace("$", "");
 export async function getLandingData(): Promise<LandingData> {
   const { data, findings } = await runDemoOffline(ANCHOR);
   const byType = (type: string) => findings.find((f) => f.finding.findingType === type);
+  const m = (f: ReturnType<typeof byType>) => (f?.finding.metadata ?? {}) as Record<string, unknown>;
 
   const dup = byType("DUPLICATE_PAYMENT");
   const margin = byType("MARGIN_EROSION");
   const pricing = byType("PRICING_OPPORTUNITY");
   const creep = byType("SUBSCRIPTION_CREEP");
-  const m = (f: typeof dup) => (f?.finding.metadata ?? {}) as Record<string, unknown>;
 
-  const dupDates = ((m(dup).paidDates as string[] | undefined) ?? []).map((d) => d.slice(5));
   const leaks: LandingLeak[] = [];
-  if (dup)
+  const add = (f: typeof dup, kind: string, subject: string) => {
+    if (!f) return -1;
     leaks.push({
-      n: "01",
-      kind: "Paid twice",
-      subject: String(m(dup).vendor ?? ""),
-      amount: format(dup.finding.annualImpactCents),
-      per: "once",
-      fracture: { angle: -0.95, spread: 0.32, band: 0 },
-      micro: `${String(m(dup).invoiceReference)} ${money2(dup.finding.annualImpactCents)} PAID ${dupDates.join(" AND ")} · SAME INVOICE TWICE`,
+      n: String(leaks.length + 1).padStart(2, "0"),
+      kind,
+      subject,
+      amount: format(f.finding.annualImpactCents),
+      cents: f.finding.annualImpactCents,
+      once: f.finding.metadata.recoveryKind !== "recurring",
     });
-  if (margin)
-    leaks.push({
-      n: "02",
-      kind: "Margin slipping",
-      subject: String(m(margin).productName ?? ""),
-      amount: format(margin.finding.annualImpactCents),
-      per: "a year",
-      fracture: { angle: 0.55, spread: 0.36, band: 1 },
-      micro: `${String(m(margin).supplier).toUpperCase()} UNIT COST 22.00 → 29.00 · RETAIL STILL 49.00`,
-    });
-  if (pricing)
-    leaks.push({
-      n: "03",
-      kind: "Underpriced",
-      subject: String(m(pricing).productName ?? ""),
-      amount: format(pricing.finding.annualImpactCents),
-      per: "a year",
-      fracture: { angle: 2.25, spread: 0.34, band: 2 },
-      micro: "ACME 79.00 · MARKET 92.00 96.00 99.00 · LOWEST PRICE OBSERVED",
-    });
-  if (creep)
-    leaks.push({
-      n: "04",
-      kind: "Price creep",
-      subject: String(m(creep).vendor ?? ""),
-      amount: format(creep.finding.annualImpactCents),
-      per: "a year",
-      fracture: { angle: 3.75, spread: 0.3, band: 0 },
-      micro: "RELAY INBOX 69.00 69.00 69.00 → 119.00 119.00 119.00",
-    });
+    return leaks.length - 1;
+  };
+  const iDup = add(dup, "Paid twice", String(m(dup).vendor ?? ""));
+  const iMargin = add(margin, "Margin slipping", String(m(margin).productName ?? ""));
+  const iPricing = add(pricing, "Underpriced", String(m(pricing).productName ?? ""));
+  const iCreep = add(creep, "Price creep", String(m(creep).vendor ?? ""));
 
-  const recurring = findings.filter((f) => f.finding.metadata.recoveryKind === "recurring").reduce((s, f) => s + f.finding.annualImpactCents, 0);
-  const once = findings.filter((f) => f.finding.metadata.recoveryKind !== "recurring").reduce((s, f) => s + f.finding.annualImpactCents, 0);
+  const recurring = leaks.filter((l) => !l.once).reduce((s, l) => s + l.cents, 0);
+  const once = leaks.filter((l) => l.once).reduce((s, l) => s + l.cents, 0);
 
-  const ledger = [...data.transactions]
-    .sort((a, b) => a.transactionDate - b.transactionDate)
-    .map((t) => `${shortDate(t.transactionDate)} ${t.merchantName.toUpperCase()}${t.invoiceReference ? ` ${t.invoiceReference}` : ""} ${money2(t.amountCents)}`);
+  // Which records each finding rests on.
+  const dupIds = new Set((m(dup).transactionIds as string[] | undefined) ?? []);
+  const squash = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
+  const supplier = squash(String(m(margin).supplier ?? "").replace(/ co\.?$/i, ""));
+  const costRise = data.supplierCosts.filter((c) => c.sku === m(margin).sku).sort((a, b) => b.effectiveDate - a.effectiveDate)[0]?.effectiveDate ?? Infinity;
+  const creepVendor = squash(String(m(creep).vendor ?? ""));
+  const pricingSku = String(m(pricing).sku ?? "");
+  const lastSale = Math.max(...data.sales.map((s) => s.soldAt));
 
-  const hotIds = new Set<string>((m(dup).transactionIds as string[] | undefined) ?? []);
-  const creepVendor = String(m(creep).vendor ?? "").toLowerCase().replace(/\s+/g, "");
-  const sortedTx = data.transactions.map((t, i) => ({ t, id: `tx-${i}` })).sort((a, b) => a.t.transactionDate - b.t.transactionDate);
-  const maxLog = Math.max(...sortedTx.map(({ t }) => Math.log10(Math.abs(t.amountCents) + 1)));
-  const scan = sortedTx.map(({ t, id }) => ({
-    w: Math.log10(Math.abs(t.amountCents) + 1) / maxLog,
-    hot: hotIds.has(id) || (creepVendor !== "" && t.normalizedMerchantName.replace(/\s+/g, "").includes(creepVendor) && t.amountCents > 10000),
-  }));
+  type Rec = { at: number; cents: number; leak: number; label: string };
+  const records: Rec[] = [
+    ...data.transactions.map((t, i): Rec => {
+      const merchant = squash(t.normalizedMerchantName);
+      let leak = -1;
+      if (dupIds.has(`tx-${i}`)) leak = iDup;
+      else if (supplier && merchant.includes(supplier) && t.transactionDate >= costRise) leak = iMargin;
+      else if (creepVendor && merchant.includes(creepVendor) && t.amountCents > 10_000) leak = iCreep;
+      return {
+        at: t.transactionDate,
+        cents: Math.abs(t.amountCents),
+        leak,
+        label: `${shortDate(t.transactionDate)}  ${t.merchantName.toUpperCase().slice(0, 26)}${t.invoiceReference ? `  ${t.invoiceReference}` : ""}  ${money2(t.amountCents)}`,
+      };
+    }),
+    ...data.sales.map((s): Rec => {
+      const product = PRODUCTS.find((p) => p.sku === s.sku);
+      return {
+        at: s.soldAt,
+        cents: s.grossRevenueCents,
+        leak: s.sku === pricingSku && s.soldAt > lastSale - 30 * DAY ? iPricing : -1,
+        label: `${shortDate(s.soldAt)}  ${s.orderId}  ${(product?.name ?? s.sku).toUpperCase().slice(0, 24)}  ${money2(s.grossRevenueCents)}`,
+      };
+    }),
+  ].sort((a, b) => a.at - b.at);
+
+  const t0 = records[0]?.at ?? 0;
+  const t1 = records.at(-1)?.at ?? 1;
+  const logs = records.map((r) => Math.log10(Math.max(r.cents, 100)));
+  const lo = Math.min(...logs);
+  const hi = Math.max(...logs);
+  const clamp = (v: number) => Math.min(0.995, Math.max(0.005, v));
+  // A small deterministic jitter keeps identical sales from landing on one pixel.
+  const jitter = (i: number) => ((Math.sin(i * 12.9898) * 43758.5453) % 1) * 0.006;
+  const xAt = (ms: number) => +clamp(0.02 + ((ms - t0) / (t1 - t0)) * 0.96).toFixed(4);
+  const yAt = (log: number) => +clamp(0.06 + (1 - (log - lo) / (hi - lo)) * 0.88).toFixed(4);
+  const months: { at: number; label: string }[] = [];
+  for (let d = new Date(t0); d.getTime() <= t1; d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))) {
+    const first = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
+    if (first >= t0) months.push({ at: xAt(first), label: new Date(first).toLocaleString("en-US", { month: "short", timeZone: "UTC" }) });
+  }
+  const yTicks = [1_000, 10_000, 100_000]
+    .filter((c) => Math.log10(c) >= lo && Math.log10(c) <= hi)
+    .map((c) => ({ at: yAt(Math.log10(c)), label: c >= 100_000 ? `$${c / 100_000}k` : `$${c / 100}` }));
+  const points = records.map((r, i): [number, number, number] => [
+    xAt(r.at),
+    +clamp(yAt(logs[i]) + jitter(i)).toFixed(4),
+    r.leak,
+  ]);
 
   const alpine = PRODUCTS.find((p) => p.sku === String(m(margin).sku));
   const market = {
@@ -118,16 +140,34 @@ export async function getLandingData(): Promise<LandingData> {
     })),
   };
 
+  const paid = ((m(dup).paidDates as string[] | undefined) ?? []).map((d) => Date.parse(d));
+  const rec = pricing?.recommendation.metadata as { fromPriceCents?: number; toPriceCents?: number } | undefined;
+
   return {
     leaks,
     totalAnnual: format(recurring + once),
     recurringAnnual: format(recurring),
     oneTime: format(once),
     totalCents: recurring + once,
-    ledger,
-    scan,
+    points,
+    labels: records.map((r) => r.label),
+    axes: { x: months, y: yTicks },
     market,
-    duplicate: { vendor: String(m(dup).vendor ?? ""), invoice: String(m(dup).invoiceReference ?? ""), amount: format(dup?.finding.annualImpactCents ?? 0), dates: dupDates },
-    stats: { days: DEMO_DAYS, sales: data.sales.length, transactions: data.transactions.length, products: data.products.length },
+    duplicate: {
+      vendor: String(m(dup).vendor ?? ""),
+      invoice: String(m(dup).invoiceReference ?? ""),
+      amount: money2(dup?.finding.annualImpactCents ?? 0),
+      cents: dup?.finding.annualImpactCents ?? 0,
+      dates: paid.map((d) => shortDate(d)),
+      gapDays: paid.length === 2 ? Math.round(Math.abs(paid[1] - paid[0]) / DAY) : 0,
+      confidence: (dup?.finding.confidence ?? 0).toFixed(2),
+    },
+    fix: {
+      product: String(m(pricing).productName ?? ""),
+      from: format(rec?.fromPriceCents ?? 0),
+      to: format(rec?.toPriceCents ?? 0),
+      annual: format(pricing?.finding.annualImpactCents ?? 0),
+    },
+    stats: { days: DEMO_DAYS, sales: data.sales.length, transactions: data.transactions.length, records: records.length },
   };
 }

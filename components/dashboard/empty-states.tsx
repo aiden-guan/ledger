@@ -3,7 +3,7 @@ import { SeedDemoButton } from "./seed-demo-button";
 export function SystemErrorPanel({ reason = "unreachable" }: { reason?: "unreachable" | "not_configured" }) {
   return (
     <main className="mx-auto max-w-xl px-4 py-24 text-center sm:px-6">
-      <p className="font-mono text-[12px] uppercase tracking-[0.08em] text-signal">
+      <p className="font-mono text-[12px] text-signal">
         {reason === "not_configured" ? "[fail] backend not configured" : "[fail] backend unreachable"}
       </p>
       <h1 className="display mt-3 text-[34px] font-medium">LedgerLens can&apos;t reach its backend.</h1>

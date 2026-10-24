@@ -238,7 +238,7 @@ With `DEMO_MODE=true` (on the Convex deployment) the header shows **Reset demo**
 
 ## Screenshots
 
-The landing page. The rosette is engraved live from the demo company's books; each red break is a leak, and the loupe magnifies the microprint, which is the real ledger:
+The landing page. Every sale and bank line of the demo company is plotted by date and amount, and a quadtree keeps splitting only the cells that hold a leak until each one is isolated. Hover any cell to read its records:
 
 ![Landing page](docs/screenshots/landing.png)
 
@@ -258,6 +258,6 @@ On a phone:
 
 ![Mobile](docs/screenshots/mobile.png)
 
-The look borrows from banknote security printing: cotton paper, one intaglio-green ink, fine guilloché line-work, microprint set from ledger text, and red reserved for money that is leaking, as in any ledger. Headlines and amounts are set in Bodoni Moda; measurements stay in Geist Mono. The money river is drawn as engraved line ribbons on a canvas. Every figure on the landing page comes from running the engine over the demo books at build time (`lib/landing/data.ts`). The site follows the system light or dark setting and respects reduced motion.
+The look is an instrument: neutral paper, one ink, hairline rules on a strict grid, and a single blue for whatever the engine found. Type is Geist, with anything measured set in Geist Mono. The quadtree is the recurring motif: the hero search, the mark, and the footer wordmark, which is rasterised and subdivided the same way. The money river is drawn as line ribbons on a canvas. Every figure on the landing page comes from running the engine over the demo books at build time (`lib/landing/data.ts`). The site follows the system light or dark setting and respects reduced motion.
 
 In development, `/preview/overview`, `/preview/findings/0` and `/preview/activity` render the app views from an in-memory engine run, without a Convex deployment (`?approved=1` on a finding shows the approved state). These routes return 404 in production.

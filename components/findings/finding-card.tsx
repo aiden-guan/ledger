@@ -37,7 +37,6 @@ export function FindingCard({ finding, index }: { finding: FindingListItem; inde
           <FindingStatusBadge status={finding.status} recommendationStatus={finding.recommendationStatus} />
         </div>
         <p className="display mt-1.5 text-[22px] leading-snug">{finding.title}</p>
-        <p className="mt-1 line-clamp-2 max-w-2xl text-[14px] text-muted-foreground">{finding.summary}</p>
         <p className="mt-3 font-mono text-[12px] text-muted-foreground">
           {sealed ? <span className="text-positive">■ approved, ready to execute</span> : <>→ {PREPARED_FIX[finding.findingType] ?? "action prepared"}</>}
           <span className="text-faint"> · confidence {percent(finding.confidence)}</span>

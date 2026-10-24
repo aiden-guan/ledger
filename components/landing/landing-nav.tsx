@@ -1,24 +1,29 @@
 import Link from "next/link";
-import { RosetteMark } from "@/components/brand/rosette-mark";
+import { Mark } from "@/components/brand/mark";
 
 export function LandingNav() {
   return (
-    <header className="mx-auto flex h-14 max-w-6xl items-center gap-6 px-4 sm:px-6">
-      <Link href="/" className="flex items-center gap-2">
-        <RosetteMark className="size-6" />
-        <span className="display text-[21px] font-medium leading-none">LedgerLens</span>
-      </Link>
-      <nav className="ml-auto flex items-center gap-5 font-mono text-[12px] text-muted-foreground">
-        <a href="#how" className="hidden transition-colors hover:text-foreground sm:inline">
-          how it works
-        </a>
-        <a href="https://github.com/aiden-guan/ledger" className="hidden transition-colors hover:text-foreground sm:inline">
-          source
-        </a>
-        <Link href="/overview" className="border border-foreground px-3 py-1.5 text-foreground transition-colors hover:bg-foreground hover:text-background">
-          open the demo
+    <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur-md">
+      <div className="mx-auto flex h-14 max-w-6xl items-center gap-8 px-4 sm:px-6">
+        <Link href="/" className="flex items-center gap-2.5 text-[15px] font-medium tracking-[-0.01em]">
+          <Mark />
+          LedgerLens
         </Link>
-      </nav>
+        <nav className="hidden items-center gap-6 font-mono text-[12px] text-muted-foreground sm:flex">
+          <a href="#method" className="transition-colors hover:text-foreground">
+            Method
+          </a>
+          <a href="https://github.com/aiden-guan/ledger" className="transition-colors hover:text-foreground">
+            Source
+          </a>
+        </nav>
+        <Link
+          href="/overview"
+          className="ml-auto rounded-[var(--radius)] bg-foreground px-3.5 py-1.5 text-[13px] font-medium text-background transition-opacity hover:opacity-85"
+        >
+          Open the demo
+        </Link>
+      </div>
     </header>
   );
 }

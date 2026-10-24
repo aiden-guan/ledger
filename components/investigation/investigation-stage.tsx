@@ -195,7 +195,7 @@ export function InvestigationStage({
             </dl>
           ) : (
             <p className="mt-6 max-w-xl text-[16px] leading-relaxed text-muted-foreground">
-              LedgerLens draws your business as a river of money, traces every leak to its source, checks competitor prices with Apify, and prepares each fix for you to approve.
+              Trace every dollar to where it goes.
             </p>
           )}
 

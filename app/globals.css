@@ -1,56 +1,56 @@
 @import "tailwindcss";
 
 /*
- * LedgerLens prints like a banknote: cotton paper, one intaglio ink, fine engraved line-work
- * (guilloché) and red reserved for money that is leaking, as in any ledger. Display figures
- * are set in a Didone, the face of denominations; measurements stay in mono.
+ * LedgerLens is an instrument: neutral paper, one ink, hairline rules on a strict grid, and a
+ * single blue that marks what the engine found. Type is Geist; anything measured is set in mono.
  */
 :root {
-  --background: oklch(0.963 0.011 108);
-  --foreground: oklch(0.21 0.026 170);
-  --card: oklch(0.982 0.007 108);
+  --background: #f4f4f1;
+  --foreground: #111111;
+  --card: #fafaf8;
   --card-foreground: var(--foreground);
-  --muted: oklch(0.935 0.013 110);
-  --muted-foreground: oklch(0.46 0.026 165);
-  --faint: oklch(0.7 0.02 160);
-  --border: oklch(0.21 0.026 170 / 0.12);
-  --border-strong: oklch(0.21 0.026 170 / 0.28);
+  --muted: #ebebe7;
+  --muted-foreground: #6b6b66;
+  --faint: #a8a8a1;
+  --border: rgb(17 17 17 / 0.09);
+  --border-strong: rgb(17 17 17 / 0.2);
   --input: var(--border-strong);
-  --ring: var(--foreground);
+  --ring: var(--signal);
   --primary: var(--foreground);
   --primary-foreground: var(--background);
   --secondary: var(--muted);
   --secondary-foreground: var(--foreground);
-  --engrave: oklch(0.43 0.07 168);
-  --signal: oklch(0.55 0.2 27);
-  --signal-soft: oklch(0.55 0.2 27 / 0.09);
-  --positive: oklch(0.5 0.11 158);
-  --positive-soft: oklch(0.5 0.11 158 / 0.1);
-  --negative: var(--signal);
-  --negative-soft: var(--signal-soft);
-  --warning: oklch(0.66 0.13 75);
-  --warning-soft: oklch(0.66 0.13 75 / 0.12);
+  --signal: #2a45f5;
+  --signal-soft: rgb(42 69 245 / 0.08);
+  --positive: var(--signal);
+  --positive-soft: var(--signal-soft);
+  --negative: #d4361f;
+  --negative-soft: rgb(212 54 31 / 0.08);
+  --warning: #b7791f;
+  --warning-soft: rgb(183 121 31 / 0.1);
   --accent: var(--signal);
-  --radius: 2px;
+  --engrave: var(--foreground);
+  --radius: 4px;
+  color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: oklch(0.175 0.02 170);
-    --foreground: oklch(0.93 0.016 108);
-    --card: oklch(0.2 0.022 170);
-    --muted: oklch(0.235 0.022 170);
-    --muted-foreground: oklch(0.7 0.03 150);
-    --faint: oklch(0.47 0.03 160);
-    --border: oklch(0.93 0.016 108 / 0.11);
-    --border-strong: oklch(0.93 0.016 108 / 0.26);
-    --engrave: oklch(0.74 0.07 160);
-    --signal: oklch(0.68 0.18 30);
-    --signal-soft: oklch(0.68 0.18 30 / 0.13);
-    --positive: oklch(0.76 0.12 158);
-    --positive-soft: oklch(0.76 0.12 158 / 0.13);
-    --warning: oklch(0.8 0.12 80);
-    --warning-soft: oklch(0.8 0.12 80 / 0.12);
+    --background: #0d0d0e;
+    --foreground: #ededea;
+    --card: #141416;
+    --muted: #1b1b1d;
+    --muted-foreground: #8e8e88;
+    --faint: #55554f;
+    --border: rgb(237 237 234 / 0.08);
+    --border-strong: rgb(237 237 234 / 0.2);
+    --signal: #7088ff;
+    --signal-soft: rgb(112 136 255 / 0.12);
+    --negative: #ff6a52;
+    --negative-soft: rgb(255 106 82 / 0.12);
+    --warning: #e0a648;
+    --warning-soft: rgb(224 166 72 / 0.12);
+    color-scheme: dark;
   }
 }
 
@@ -80,13 +80,13 @@
   --color-warning-soft: var(--warning-soft);
   --color-accent: var(--accent);
   --color-engrave: var(--engrave);
-  --radius-sm: 1px;
-  --radius-md: 2px;
-  --radius-lg: 2px;
-  --radius-xl: 3px;
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
-  --font-display: var(--font-bodoni), "Bodoni 72", Didot, Georgia, serif;
+  --font-display: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
 }
 
 @layer base {
@@ -110,23 +110,19 @@
   }
 }
 
-/* Small uppercase mono label used for section numbers, keys and metadata. */
+/* Small mono label used for section numbers, keys and metadata. */
 .label {
   font-family: var(--font-mono);
   font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--muted-foreground);
 }
 
-/* A framed panel whose title sits in the top rule, like a terminal window or a spec sheet. */
+/* A plain panel with a hairline border. */
 .frame {
   position: relative;
   border: 1px solid var(--border-strong);
   background: var(--card);
-  box-shadow:
-    0 0 0 3px var(--background),
-    0 0 0 4px var(--border);
+  border-radius: var(--radius);
 }
 .frame-title {
   position: absolute;
@@ -136,18 +132,14 @@
   background: var(--background);
   font-family: var(--font-mono);
   font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  letter-spacing: 0.04em;
   color: var(--muted-foreground);
 }
 
-/* Blueprint grid used behind the hero. */
+/* Dot grid behind figures. */
 .grid-paper {
-  background-image:
-    linear-gradient(to right, var(--border) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--border) 1px, transparent 1px);
-  background-size: 24px 24px;
-  mask-image: linear-gradient(to bottom, black 30%, transparent);
+  background-image: radial-gradient(var(--border-strong) 0.6px, transparent 0.7px);
+  background-size: 16px 16px;
 }
 
 /* Leader dots between a label and its value. */
@@ -207,32 +199,16 @@
   }
 }
 
-/* Display numerals and headings: a Didone with tight tracking, like a denomination. */
+/* Headings: Geist, tight. */
 .display {
   font-family: var(--font-display);
-  font-optical-sizing: auto;
-  font-variant-numeric: lining-nums;
-  letter-spacing: -0.02em;
+  font-weight: 500;
+  letter-spacing: -0.035em;
 }
 
-/* Microprint: the tiny repeating text that banknotes use as a security line. */
-.microprint {
-  font-family: var(--font-mono);
-  font-size: 7px;
-  line-height: 1;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  overflow: hidden;
-  color: var(--muted-foreground);
-}
-
-/* Engraved hatching used to fill large type: fine horizontal rules instead of a solid fill. */
-.hatched {
-  background-image: repeating-linear-gradient(to bottom, var(--hatch, var(--engrave)) 0 1px, transparent 1px 4px);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+/* Amounts: tabular, lining figures. */
+.figure {
+  font-variant-numeric: tabular-nums lining-nums;
 }
 
 /* Line-by-line reveal for headings: each line rises out of a clipped slot. */
@@ -264,22 +240,27 @@
   animation: ll-fade 700ms ease-out both;
 }
 
+/* Scroll reveal, toggled by the Reveal component. */
+.reveal {
+  opacity: 0;
+  transform: translateY(10px);
+  transition:
+    opacity 700ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 700ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal.in {
+  opacity: 1;
+  transform: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .rise-slot > span,
   .animate-fade {
     animation: none;
   }
-}
-
-@keyframes ll-drift {
-  to {
-    transform: translateX(-50%);
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
   }
-}
-
-/* Figures use a lower optical size: at display sizes the high-contrast cut loses the hairline
-   of the 4 and shrinks the comma to a dot, which makes amounts ambiguous. */
-.figure {
-  font-optical-sizing: none;
-  font-variation-settings: "opsz" 24;
 }

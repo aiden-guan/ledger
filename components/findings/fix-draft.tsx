@@ -42,7 +42,7 @@ export function FixDraftPanel({ draft, sealed }: { draft: FixDraft; sealed: bool
           <span className="text-muted-foreground">→</span>
           <span className="tabular">{format(draft.toCents, { compact: false })}</span>
         </p>
-        <p className="mt-5 text-[13px] text-muted-foreground">{draft.note} Approving marks it ready; you update the storefront.</p>
+        <p className="mt-5 text-[13px] text-muted-foreground">{draft.note}</p>
       </Frame>
     );
   }
@@ -67,7 +67,7 @@ export function FixDraftPanel({ draft, sealed }: { draft: FixDraft; sealed: bool
         </div>
       </div>
       <p className="whitespace-pre-wrap px-5 py-5 text-[14px] leading-relaxed">{draft.body}</p>
-      <p className="border-t border-border px-5 py-3 font-mono text-[11px] text-muted-foreground">ledgerlens never sends anything for you. every amount here comes from the evidence below.</p>
+      <p className="border-t border-border px-5 py-3 font-mono text-[11px] text-muted-foreground">not sent. you send it.</p>
     </Frame>
   );
 }
