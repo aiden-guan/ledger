@@ -223,7 +223,7 @@ That pushes the Convex functions and builds Next.js against the production deplo
 
 With `DEMO_MODE=true` (on the Convex deployment) the header shows **Reset demo** and the demo seed and reset functions run. With it off, they refuse with FORBIDDEN and the button is hidden. The suggested demo:
 
-1. Open the landing page and move the loupe over a red break in the rosette, then click **Open the case files**. The dashboard's money river shows where Acme Outdoor Co.'s revenue goes and how thin its profit is.
+1. Open the landing page and scroll: the tree grows from Acme Outdoor Co.'s books to its findings. Click a finding to grow twigs out to its evidence, then click **Open the demo**. The dashboard's money river shows where the company's revenue goes and how thin its profit is.
 2. Click **Investigate again** (or **Run investigation** on a fresh seed). Suspected leaks appear on the river as the agent works, then turn into measured amounts.
 3. Click **Preview with fixes** to see profit with every prepared fix approved.
 4. Open the highest-value leak: review the prepared fix, the calculations and the source evidence.
@@ -250,7 +250,7 @@ With `DEMO_MODE=true` (on the Convex deployment) the header shows **Reset demo**
 
 ## Screenshots
 
-The landing page. Every sale and bank line of the demo company is plotted by date and amount, and a quadtree keeps splitting only the cells that hold a leak until each one is isolated. Hover any cell to read its records:
+The landing page, fully grown. The roots are the demo company's books, the trunk is the engine, each limb is a finding, and the share of a limb that is orange is proportional to the money it recovers. Scrolling grows the tree; clicking a finding grows twigs out to its evidence:
 
 ![Landing page](docs/screenshots/landing.png)
 
@@ -270,6 +270,6 @@ On a phone:
 
 ![Mobile](docs/screenshots/mobile.png)
 
-The look is an instrument: neutral paper, one ink, hairline rules on a strict grid, and a single blue for whatever the engine found. Type is Geist, with anything measured set in Geist Mono. The quadtree is the recurring motif: the hero search, the mark, and the footer wordmark, which is rasterised and subdivided the same way. The money river is drawn as line ribbons on a canvas. Every figure on the landing page comes from running the engine over the demo books at build time (`lib/landing/data.ts`). The site follows the system light or dark setting and respects reduced motion.
+The look is a field notebook: warm paper, black ink, hairline rules, and two pigments. Blue is the books; orange is money the engine found. Type is Geist, with anything measured set in Geist Mono. The landing tree is generated from a fixed seed (`lib/landing/tree.ts`) and drawn on a pixel grid on a canvas, one frame per scroll position. The money river is drawn as line ribbons on a canvas. Every figure on the landing page comes from running the engine over the demo books at build time (`lib/landing/data.ts`). The site follows the system light or dark setting and respects reduced motion.
 
 In development, `/preview/overview`, `/preview/findings/0` and `/preview/activity` render the app views from an in-memory engine run, without a Convex deployment (`?approved=1` on a finding shows the approved state). These routes return 404 in production.

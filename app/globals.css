@@ -1,11 +1,11 @@
 @import "tailwindcss";
 
 /*
- * LedgerLens is an instrument: neutral paper, one ink, hairline rules on a strict grid, and a
- * single blue that marks what the engine found. Type is Geist; anything measured is set in mono.
+ * LedgerLens is a field notebook: warm paper, black ink, hairline rules, and two pigments. Blue is
+ * the books; orange is money the engine found. Type is Geist; anything measured is set in mono.
  */
 :root {
-  --background: #f4f4f1;
+  --background: #f6f4ee;
   --foreground: #111111;
   --card: #fafaf8;
   --card-foreground: var(--foreground);
@@ -20,8 +20,9 @@
   --primary-foreground: var(--background);
   --secondary: var(--muted);
   --secondary-foreground: var(--foreground);
-  --signal: #2a45f5;
-  --signal-soft: rgb(42 69 245 / 0.08);
+  --signal: #1662e6;
+  --signal-soft: rgb(22 98 230 / 0.08);
+  --found: #e2711d;
   --positive: var(--signal);
   --positive-soft: var(--signal-soft);
   --negative: #d4361f;
@@ -44,8 +45,9 @@
     --faint: #55554f;
     --border: rgb(237 237 234 / 0.08);
     --border-strong: rgb(237 237 234 / 0.2);
-    --signal: #7088ff;
-    --signal-soft: rgb(112 136 255 / 0.12);
+    --signal: #5b93ff;
+    --signal-soft: rgb(91 147 255 / 0.12);
+    --found: #ff9a4a;
     --negative: #ff6a52;
     --negative-soft: rgb(255 106 82 / 0.12);
     --warning: #e0a648;
@@ -72,6 +74,7 @@
   --color-secondary-foreground: var(--secondary-foreground);
   --color-signal: var(--signal);
   --color-signal-soft: var(--signal-soft);
+  --color-found: var(--found);
   --color-positive: var(--positive);
   --color-positive-soft: var(--positive-soft);
   --color-negative: var(--negative);
@@ -263,4 +266,54 @@
     transform: none;
     transition: none;
   }
+}
+
+/* Paper grain under the landing tree. */
+.paper::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.5;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.4 0 0 0 0 0.36 0 0 0 0 0.3 0 0 0 0.09 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+@media (prefers-color-scheme: dark) {
+  .paper::before {
+    opacity: 0.25;
+  }
+}
+
+/* A hairline that drips downward: scroll this way. */
+@keyframes ll-cue {
+  0% {
+    transform: scaleY(0);
+    transform-origin: top;
+  }
+  50% {
+    transform: scaleY(1);
+    transform-origin: top;
+  }
+  51% {
+    transform-origin: bottom;
+  }
+  100% {
+    transform: scaleY(0);
+    transform-origin: bottom;
+  }
+}
+.scroll-cue {
+  animation: ll-cue 2.2s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .scroll-cue {
+    animation: none;
+  }
+}
+
+/* Text set over the tree keeps a soft ring of paper around it. */
+.halo {
+  text-shadow:
+    0 0 3px var(--background),
+    0 0 6px var(--background),
+    0 0 12px var(--background);
 }

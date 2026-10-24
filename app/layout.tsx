@@ -7,7 +7,7 @@ import "./globals.css";
 
 export const viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f4f4f1" },
+    { media: "(prefers-color-scheme: light)", color: "#f6f4ee" },
     { media: "(prefers-color-scheme: dark)", color: "#0d0d0e" },
   ],
 };

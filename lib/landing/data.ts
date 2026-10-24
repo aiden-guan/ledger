@@ -14,6 +14,8 @@ export interface LandingLeak {
   amount: string;
   cents: number;
   once: boolean;
+  /** Up to three lines of the finding's evidence, most telling first. */
+  evidence: string[];
 }
 
 export interface LandingData {
@@ -31,7 +33,7 @@ export interface LandingData {
   /** Axis ticks in the same unit coordinates as points. */
   axes: { x: { at: number; label: string }[]; y: { at: number; label: string }[] };
   fix: { product: string; from: string; to: string; annual: string };
-  stats: { days: number; sales: number; transactions: number; records: number };
+  stats: { days: number; sales: number; transactions: number; costs: number; competitors: number; records: number };
 }
 
 const ANCHOR = new Date("2026-10-24T00:00:00Z");
@@ -39,6 +41,15 @@ const DAY = 86_400_000;
 
 const shortDate = (ms: number) => new Date(ms).toISOString().slice(5, 10);
 const money2 = (cents: number) => format(cents).replace("$", "");
+
+// Evidence that only repeats what the others say goes last.
+const SECONDARY = new Set(["COMPETITOR_PRICE", "RETAIL_PRICE_HISTORY", "SALES_VELOCITY"]);
+
+function pickEvidence(evidence: { evidenceType: string; title: string; description: string }[]) {
+  const ranked = [...evidence.filter((e) => !SECONDARY.has(e.evidenceType)), ...evidence.filter((e) => SECONDARY.has(e.evidenceType))];
+  // A competitor price's description is a capture note; its title carries the price.
+  return ranked.slice(0, 3).map((e) => (e.evidenceType === "COMPETITOR_PRICE" ? e.title : e.description).replace(/\.$/, ""));
+}
 
 export async function getLandingData(): Promise<LandingData> {
   const { data, findings } = await runDemoOffline(ANCHOR);
@@ -60,6 +71,7 @@ export async function getLandingData(): Promise<LandingData> {
       amount: format(f.finding.annualImpactCents),
       cents: f.finding.annualImpactCents,
       once: f.finding.metadata.recoveryKind !== "recurring",
+      evidence: pickEvidence(f.evidence),
     });
     return leaks.length - 1;
   };
@@ -168,6 +180,6 @@ export async function getLandingData(): Promise<LandingData> {
       to: format(rec?.toPriceCents ?? 0),
       annual: format(pricing?.finding.annualImpactCents ?? 0),
     },
-    stats: { days: DEMO_DAYS, sales: data.sales.length, transactions: data.transactions.length, records: records.length },
+    stats: { days: DEMO_DAYS, sales: data.sales.length, transactions: data.transactions.length, costs: data.supplierCosts.length, competitors: COMPETITORS.length, records: records.length },
   };
 }
