@@ -29,21 +29,27 @@ const EnvSchema = z.object({
 
 export type Env = z.infer<typeof EnvSchema>;
 
-let cached: Env | null = null;
+const ENV_KEYS = Object.keys(EnvSchema.shape);
+
+// Keyed on the raw values, so a variable set with `npx convex env set` is picked up by a warm
+// function instance without waiting for a redeploy.
+let cached: { key: string; env: Env } | null = null;
 
 function blankToUndefined(source: NodeJS.ProcessEnv): Record<string, string | undefined> {
   return Object.fromEntries(Object.entries(source).map(([k, v]) => [k, v === "" ? undefined : v]));
 }
 
 export function getEnv(): Env {
-  if (cached) return cached;
-  const parsed = EnvSchema.safeParse(blankToUndefined(process.env));
+  const source = blankToUndefined(process.env);
+  const key = ENV_KEYS.map((k) => source[k] ?? "").join("\u0000");
+  if (cached?.key === key) return cached.env;
+  const parsed = EnvSchema.safeParse(source);
   if (!parsed.success) {
     const issues = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
     throw new Error(`Invalid environment configuration: ${issues}`);
   }
-  cached = parsed.data;
-  return cached;
+  cached = { key, env: parsed.data };
+  return cached.env;
 }
 
 /** Test hook: re-read process.env on next access. */
