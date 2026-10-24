@@ -447,7 +447,7 @@ export function MoneyTree({ data }: { data: LandingData }) {
       if (status.current && found.current) {
         const f = format(cents);
         if (f !== lastFound) found.current.textContent = lastFound = f;
-        status.current.style.opacity = String(smooth(CLOCK.limbs[0], CLOCK.limbs[0] + 0.03, g) * (1 - smooth(CLOCK.yield - 0.01, CLOCK.yield + 0.03, g)));
+        status.current.style.opacity = String(cents > 0 ? 1 - smooth(CLOCK.yield - 0.01, CLOCK.yield + 0.03, g) : 0);
       }
       if (hero.current) {
         const out = smooth(START + 0.01, START + 0.08, g);
