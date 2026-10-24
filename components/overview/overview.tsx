@@ -147,6 +147,8 @@ const labelWidth = (title: string, sub?: string, value?: string) =>
 /** Long bank descriptors are cut to keep labels short. */
 const clip = (s: string, n = 26) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
 
+const TOUR_QUESTION = "Why was a Summit payment held?";
+
 const SEAM_STATUS: Record<string, string> = { held: "held", awaiting: "needs you", blocked: "blocked", released: "released", posted: "posted", flagged: "flagged" };
 
 interface Label {
@@ -617,32 +619,36 @@ export function Overview({ source }: { source: Source }) {
   };
 
   // Keyboard: arrows move between beats, Enter does the beat's one thing.
-  const keys = useRef({
+  const [touring, setTouring] = useState(false);
+  const state = {
     next,
     prev,
     primary,
     go,
     setDetails,
     decidePayment,
+    ask,
+    setTouring,
     firstWaiting,
     chapter,
     details,
-  });
-  keys.current = {
-    next,
-    prev,
-    primary,
-    go,
-    setDetails,
-    decidePayment,
-    firstWaiting,
-    chapter,
-    details,
+    touring,
+    running,
+    decision,
+    feedRunning: Boolean(feed?.running),
+    asking: latestAsk?.status === "thinking",
   };
+  const keys = useRef(state);
+  keys.current = state;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const k = keys.current;
       const typing = e.target instanceof HTMLElement && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable);
+      // Any key hands control back from the tour; p starts it.
+      if (k.touring && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        k.setTouring(false);
+        if (e.key === "p" || e.key === "Escape") return;
+      } else if (e.key === "p" && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) return k.setTouring(true);
       if (e.key === "Escape") {
         if (typing) (e.target as HTMLElement).blur();
         if (k.details) k.setDetails(false);
@@ -667,6 +673,66 @@ export function Overview({ source }: { source: Source }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  // The tour plays the whole demo hands-free, for recording: each beat's one thing, waiting on the
+  // engine, the feed and the agent rather than on a clock. ?tour in the address starts it.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).has("tour")) setTouring(true);
+  }, []);
+  useEffect(() => {
+    if (!touring) return;
+    let stop = false;
+    const k = () => keys.current;
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const until = async (ok: () => boolean, ms: number) => {
+      const t0 = Date.now();
+      while (!stop && !ok() && Date.now() - t0 < ms) await sleep(150);
+    };
+    const beat = async (c: Chapter, settle: number) => {
+      if (stop) return;
+      k().go(c);
+      await sleep(settle);
+    };
+    (async () => {
+      await beat("books", 4000);
+      await beat("investigate", 2500);
+      if (stop) return;
+      k().primary();
+      await until(() => k().running, 8000);
+      await until(() => !k().running, 240_000);
+      await sleep(3500);
+      await beat("decide", 0);
+      for (let i = 0; i < 2 && !stop; i++) {
+        await sleep(3200);
+        const d = k().decision;
+        if (stop || !d || isFixed(d)) break;
+        k().primary();
+        await sleep(2400);
+      }
+      await sleep(1500);
+      await beat("screen", 1800);
+      if (stop) return;
+      k().primary();
+      await until(() => k().feedRunning, 8000);
+      await until(() => !k().feedRunning, 120_000);
+      await sleep(1500);
+      const w = k().firstWaiting;
+      if (!stop && w) k().decidePayment(w.id, "block");
+      await sleep(2500);
+      await beat("ask", 1800);
+      if (stop) return;
+      k().ask(TOUR_QUESTION);
+      await until(() => k().asking, 8000);
+      await until(() => !k().asking, 120_000);
+      await sleep(6000);
+      await beat("end", 0);
+    })().finally(() => {
+      if (!stop) setTouring(false);
+    });
+    return () => {
+      stop = true;
+    };
+  }, [touring]);
 
   // ---- Statement ---------------------------------------------------------------------
   const total = (list: FieldLeak[]) => list.reduce((s, l) => s + l.annualCents, 0);

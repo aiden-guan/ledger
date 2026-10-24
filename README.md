@@ -233,6 +233,8 @@ With `DEMO_MODE=true` (on the Convex deployment) the header shows **Reset demo**
 6. **Ask.** Click a suggestion, or press / and type. The answer cites its records, and the field pins each one.
 7. Press d at any time for the engine's step timings, the inputs, the audit trail and the live subscriptions. **Reset demo** starts over.
 
+To record the walkthrough in one take, press p (or open `/overview?tour`): the overview plays every beat by itself, waiting on the engine, the feed and the agent rather than on a timer, and approves two fixes, blocks the lookalike payment and asks one question along the way. Any key hands control back.
+
 ## Limitations
 
 - Margin and pricing findings annualize the trailing 90 days of unit sales (multiplied by 4). Seasonal businesses will see different figures at different times of year.
