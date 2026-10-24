@@ -21,7 +21,7 @@ const EnvSchema = z.object({
   APIFY_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
   LLM_PROVIDER: z.enum(["anthropic", "none"]).default("anthropic"),
   LLM_API_KEY: z.string().optional(),
-  LLM_MODEL: z.string().default("claude-opus-5-5"),
+  LLM_MODEL: z.string().default("claude-sonnet-5-5"),
   LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
   INVESTIGATION_STEP_DELAY_MS: z.coerce.number().int().min(0).default(450),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),

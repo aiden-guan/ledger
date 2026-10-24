@@ -149,7 +149,7 @@ See `.env.example` for the full annotated list.
 | `APP_URL` | yes in production | Public URL of the Next.js app. Seeded competitor listings point at `<url>/market/...`. |
 | `LLM_PROVIDER` | no | `anthropic` (default) or `none`. |
 | `LLM_API_KEY` | no | Anthropic API key. Without it, narratives are rules-based. |
-| `LLM_MODEL` | no | Default `claude-opus-5-5`. |
+| `LLM_MODEL` | no | Default `claude-sonnet-5-5`. |
 | `APIFY_TOKEN` | no | Needed for live market data. |
 | `APIFY_ACTOR_ID` | no | e.g. `your-username/ledgerlens-competitor-pricing`. |
 | `EXTERNAL_INTEL_MODE` | no | `fixture` (default) or `live`. |
