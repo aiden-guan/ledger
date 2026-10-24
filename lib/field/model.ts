@@ -65,6 +65,8 @@ export interface FieldLeak {
   ownPriceCents: number | null;
   /** Up to three lines of evidence, most telling first. */
   evidence: string[];
+  /** The arithmetic behind the amount, step by step, as the engine computed it. */
+  calculations: { label: string; formula: string; result: string }[];
   narrativeSource: string | null;
 }
 
@@ -245,6 +247,9 @@ export function buildField(input: FieldInput): FieldData {
       prices,
       ownPriceCents,
       evidence: pickEvidence(ev),
+      calculations: Array.isArray(m.calculations)
+        ? (m.calculations as Record<string, unknown>[]).map((c) => ({ label: String(c.label ?? ""), formula: String(c.formula ?? ""), result: String(c.result ?? "") }))
+        : [],
       narrativeSource: (m.narrativeSource as string | undefined) ?? null,
     };
   });

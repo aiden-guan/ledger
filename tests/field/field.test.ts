@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { previewField } from "@/lib/demo/preview";
+import { format } from "@/lib/finance/money";
 
 /*
  * The field must point each finding at exactly the records its numbers were computed from, so
@@ -54,6 +55,16 @@ describe("field", async () => {
       expect(leak.prices.length).toBeGreaterThanOrEqual(2);
       expect(leak.prices.every((p) => p.cents > leak.ownPriceCents!)).toBe(true);
     }
+  });
+
+  it("carries the arithmetic behind every amount", () => {
+    for (const leak of field.leaks) {
+      expect(leak.calculations.length).toBeGreaterThanOrEqual(3);
+      expect(leak.calculations.every((c) => c.label && c.formula && c.result)).toBe(true);
+    }
+    const dup = byType("DUPLICATE_PAYMENT").calculations;
+    expect(dup.find((c) => c.label === "Duplicate score")?.result).toBe("1.00");
+    expect(dup.at(-1)?.result).toBe(format(byType("DUPLICATE_PAYMENT").annualCents));
   });
 
   it("drafts a fix for every finding and keeps evidence short", () => {

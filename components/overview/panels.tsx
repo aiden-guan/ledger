@@ -9,11 +9,10 @@ import type { CashForecast } from "@/lib/finance/forecast";
 import { format } from "@/lib/finance/money";
 import { isFixed, type FieldData, type FieldLeak } from "@/lib/field/model";
 import type { FixDraft } from "@/lib/investigation/drafts";
-import { INVESTIGATION_STEPS } from "@/lib/investigation/state-machine";
 import { cn } from "@/lib/utils/cn";
 import { withDecisions } from "./forecast";
-import type { RunView } from "./overview";
 import type { Ask, Feed, FeedItem } from "./source";
+import { CHECKS, TOOLS, type TraceStep } from "./system";
 
 /* What sits under the field in each beat. Each asks for one thing, at most. */
 
@@ -82,29 +81,58 @@ export function BooksPanel({ field }: { field: FieldData }) {
   );
 }
 
-function Steps({ run }: { run: RunView | null }) {
+const ms = (n: number) => (n < 1000 ? `${Math.max(0, Math.round(n))}ms` : `${(n / 1000).toFixed(1)}s`);
+
+const STEP_NODE: Record<TraceStep["status"], string> = {
+  pending: "border-border-strong",
+  running: "cursor-blink border-foreground bg-foreground",
+  done: "border-muted-foreground bg-muted-foreground",
+  warning: "border-warning bg-warning",
+  failed: "border-negative",
+};
+
+/** The run as the engine logged it: each step, the part that ran it, what it tested and what it found. */
+function Trace({ trace, elapsed }: { trace: TraceStep[]; elapsed: number | null }) {
   return (
-    <div className="flex items-center gap-1" aria-hidden>
-      {INVESTIGATION_STEPS.map((s) => {
-        const done = !run || run.done.has(s.key);
-        const current = run?.step === s.key;
-        return (
-          <span
-            key={s.key}
-            title={STEP_NAMES[s.key]}
+    <div className="min-w-0">
+      <div className="mb-1 flex items-baseline gap-3 font-mono text-[11px] text-faint">
+        <span>engine trace</span>
+        <span className="leader" />
+        {elapsed !== null && <span className="tabular">{ms(elapsed)}</span>}
+      </div>
+      <ol className="font-mono text-[11px] leading-[17px]">
+        {trace.map((t, i) => (
+          <li
+            key={t.key}
+            title={t.message || undefined}
             className={cn(
-              "size-2.5 border transition-colors duration-300",
-              current ? "cursor-blink border-signal bg-signal" : done ? (run?.failed && !run.done.has(s.key) ? "border-found" : "border-foreground bg-foreground") : "border-border-strong",
+              "grid grid-cols-[1.3rem_3.7rem_minmax(0,7.5rem)_minmax(0,1fr)] items-baseline gap-x-2 sm:grid-cols-[1.3rem_3.7rem_8.2rem_minmax(0,14.5rem)_minmax(0,1fr)_3rem]",
+              t.status === "pending" ? "text-faint" : t.status === "running" ? "text-foreground" : "text-muted-foreground",
             )}
-          />
-        );
-      })}
+          >
+            <span className="tabular text-faint">{String(i + 1).padStart(2, "0")}</span>
+            <span className="flex items-center gap-1.5">
+              <span aria-hidden className={cn("size-[7px] shrink-0 border transition-colors duration-300", STEP_NODE[t.status])} />
+              {t.who}
+            </span>
+            <span className="truncate">{STEP_NAMES[t.key]}</span>
+            <span className="hidden truncate text-faint sm:block">{t.check}</span>
+            <span className={cn("truncate", t.found && "text-found", t.status === "failed" && "text-negative")}>
+              {t.result}
+              {t.status === "running" && <span className="cursor-blink text-signal">_</span>}
+            </span>
+            <span className="hidden text-right tabular text-faint sm:block">{t.ms !== null && (t.status === "done" || t.status === "warning") ? ms(t.ms) : ""}</span>
+          </li>
+        ))}
+      </ol>
     </div>
   );
 }
 
 export function InvestigatePanel({
-  run,
+  trace,
+  elapsed,
+  running,
   leaks,
   total,
   busy,
@@ -112,9 +140,10 @@ export function InvestigatePanel({
   onInvestigate,
   onFocus,
   focus,
-  field,
 }: {
-  run: RunView | null;
+  trace: TraceStep[];
+  elapsed: number | null;
+  running: boolean;
   leaks: FieldLeak[];
   total: number;
   busy: boolean;
@@ -122,66 +151,54 @@ export function InvestigatePanel({
   onInvestigate: () => void;
   onFocus: (fingerprint: string | null) => void;
   focus: string | null;
-  field: FieldData;
 }) {
-  const running = Boolean(run?.running);
-  const i = field.investigation;
   return (
-    <div className="grid gap-6 md:grid-cols-[1fr_auto] md:items-start">
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <Steps run={running || run?.failed ? run : null} />
-          <span className="font-mono text-[12px] text-muted-foreground">
-            {running ? (
-              <>
-                {STEP_NAMES[run!.step ?? "ingest"]} <span className="tabular text-faint">· {run!.elapsed.toFixed(1)}s</span>
-              </>
-            ) : run && !run.failed ? (
-              <>
-                ten steps in <span className="tabular">{run.elapsed.toFixed(1)}s</span> · market data: {marketSource(field)} · narrative: {i?.model ?? "rules-based"}
-              </>
-            ) : (
-              <>
-                ten steps · market data: {marketSource(field)} · narrative: {i?.model ?? "rules-based"}
-              </>
-            )}
-          </span>
+    <div className="grid grid-cols-1 gap-x-10 gap-y-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <Trace trace={trace} elapsed={elapsed} />
+      <div className="flex min-w-0 flex-col items-start gap-4">
+        <div className="w-full">
+          <div className="mb-1 flex items-baseline gap-3 font-mono text-[11px] text-faint">
+            <span>found</span>
+            <span className="leader" />
+            <span className="tabular">{leaks.length}</span>
+          </div>
+          {leaks.length > 0 ? (
+            <ul>
+              {leaks.map((l) => (
+                <li key={l.fingerprint} className="animate-fade-up border-b last:border-b-0" onPointerEnter={() => onFocus(l.fingerprint)} onPointerLeave={() => onFocus(null)}>
+                  <div className="flex items-baseline gap-3 py-1.5">
+                    <span className="shrink-0 text-[14px] font-medium">{l.kind}</span>
+                    <span className="truncate text-[13px] text-faint">{l.subject}</span>
+                    <span className="leader" />
+                    <span className={cn("shrink-0 font-mono text-[13px] tabular", isFixed(l) ? "text-signal" : "text-found")}>
+                      {format(l.annualCents)}
+                      <span className="text-faint">{l.oneTime ? " once" : "/yr"}</span>
+                    </span>
+                  </div>
+                  {focus === l.fingerprint && (
+                    <ul className="grid gap-1 pb-2.5 font-mono text-[11px] leading-[15px] text-muted-foreground">
+                      {l.evidence.map((line) => (
+                        <li key={line} className="animate-fade-up">
+                          {line}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="py-1.5 font-mono text-[11px] text-faint">{running ? "nothing measured yet" : "nothing found yet"}</p>
+          )}
+          {!running && leaks.length > 0 && leaks.length < total && <p className="mt-1 font-mono text-[11px] text-faint">measuring…</p>}
         </div>
-
-        {!running && leaks.length > 0 && (
-          <ul className="mt-5 max-w-2xl">
-            {leaks.map((l) => (
-              <li key={l.fingerprint} className="animate-fade-up border-b last:border-b-0" onPointerEnter={() => onFocus(l.fingerprint)} onPointerLeave={() => onFocus(null)}>
-                <div className="flex items-baseline gap-3 py-2">
-                  <span className="text-[14px] font-medium">{l.kind}</span>
-                  <span className="truncate text-[13px] text-faint">{l.subject}</span>
-                  <span className="leader" />
-                  <span className={cn("font-mono text-[13px] tabular", isFixed(l) ? "text-signal" : "text-found")}>
-                    {format(l.annualCents)}
-                    <span className="text-faint">{l.oneTime ? " once" : "/yr"}</span>
-                  </span>
-                </div>
-                {focus === l.fingerprint && (
-                  <ul className="grid gap-1 pb-3 font-mono text-[11.5px] leading-[16px] text-muted-foreground">
-                    {l.evidence.map((line) => (
-                      <li key={line} className="animate-fade-up">
-                        {line}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-        {!running && leaks.length < total && leaks.length > 0 && <p className="mt-2 font-mono text-[11px] text-faint">measuring…</p>}
+        <Button size="lg" onClick={onInvestigate} disabled={busy || running}>
+          {running ? "Investigating" : started ? "Investigate again" : "Investigate"}
+          <span aria-hidden className="text-[11px] opacity-60">
+            ↵
+          </span>
+        </Button>
       </div>
-      <Button size="lg" onClick={onInvestigate} disabled={busy || running}>
-        {running ? "Investigating" : started ? "Investigate again" : "Investigate"}
-        <span aria-hidden className="text-[11px] opacity-60">
-          ↵
-        </span>
-      </Button>
     </div>
   );
 }
@@ -232,7 +249,7 @@ export function DecidePanel({
 }) {
   const projected = forecast ? withDecisions(forecast, leaks) : null;
   return (
-    <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_300px]">
+    <div className={cn("grid grid-cols-1 gap-x-10 gap-y-6 lg:grid-cols-[minmax(0,1fr)_300px]", decision && "xl:grid-cols-[minmax(0,1fr)_300px_250px]")}>
       <div className="min-w-0 max-w-2xl">
         {decision ? (
           <div key={decision.fingerprint} className="animate-fade-up">
@@ -274,12 +291,46 @@ export function DecidePanel({
           </div>
         )}
       </div>
+      {decision && <Proof leak={decision} />}
       {projected && (
-        <aside>
+        <aside className={cn(decision && "lg:hidden xl:block")}>
           <p className="label mb-3">cash, next 90 days</p>
           <ForecastChart forecast={projected} />
         </aside>
       )}
+    </div>
+  );
+}
+
+// A long derivation keeps the lines that carry it; the rest stay in the finding's evidence.
+const MINOR_ROWS = new Set(["Cost absorbed per month", "Gap to median", "Monthly upside", "Annual upside"]);
+
+/** The arithmetic behind the amount, as the engine computed it. Hover a line for its formula. */
+function Proof({ leak }: { leak: FieldLeak }) {
+  const rows = leak.calculations.length > 7 ? leak.calculations.filter((c) => !MINOR_ROWS.has(c.label)) : leak.calculations;
+  if (!rows.length) return null;
+  return (
+    <div key={leak.fingerprint} className="min-w-0">
+      <div className="mb-1.5 flex items-baseline gap-3 font-mono text-[11px] text-faint">
+        <span>the math</span>
+        <span className="leader" />
+        <span>rules · cents</span>
+      </div>
+      <dl className="grid grid-cols-1 gap-[3px] font-mono text-[11px] leading-[15px]">
+        {rows.map((c, i) => {
+          const last = i === rows.length - 1;
+          return (
+            <div key={c.label} title={`${c.label}: ${c.formula}`} className="animate-fade-up flex items-baseline gap-2" style={{ animationDelay: `${120 + i * 70}ms` }}>
+              <dt className={cn("min-w-0 truncate", last ? "text-foreground" : "text-muted-foreground")}>{c.label}</dt>
+              <span className="leader" />
+              <dd className={cn("shrink-0 tabular", last ? (isFixed(leak) ? "text-signal" : "text-found") : "text-foreground")}>{c.result}</dd>
+            </div>
+          );
+        })}
+      </dl>
+      <p className="animate-fade-up mt-1.5 font-mono text-[10.5px] leading-[14px] text-faint" style={{ animationDelay: `${120 + rows.length * 70}ms` }}>
+        = {rows.at(-1)!.formula}
+      </p>
     </div>
   );
 }
@@ -295,14 +346,44 @@ const STATUS: Record<FeedItem["status"], { label: string; className: string }> =
 
 const clock = (ms: number) => new Date(ms).toLocaleTimeString("en-US", { hour12: false });
 
+const VERDICT_FILL: Record<FeedItem["verdict"], string> = { hold: "bg-found", review: "bg-warning", clear: "bg-muted-foreground" };
+
+/** A payment's risk score as the checks that built it, against the flag and hold lines. */
+function ScoreBar({ item, policy }: { item: FeedItem; policy: Feed["policy"] }) {
+  let x = 0;
+  return (
+    <span className="flex items-center gap-2" title={`risk ${item.score.toFixed(2)} · flags at ${policy.reviewAt.toFixed(2)} · holds at ${policy.holdAt.toFixed(2)}`}>
+      <span className="relative h-[7px] w-[84px] shrink-0 bg-border">
+        {item.signals.map((sig, i) => {
+          const left = x;
+          const w = Math.max(0, Math.min(sig.weight, 1 - x));
+          x += w;
+          return w > 0 ? (
+            <span
+              key={sig.signal}
+              className={cn("animate-grow absolute inset-y-0 origin-left", VERDICT_FILL[item.verdict], i % 2 === 1 && "opacity-75")}
+              style={{ left: `${left * 100}%`, width: `calc(${w * 100}% - 1px)`, animationDelay: `${i * 110}ms` }}
+            />
+          ) : null;
+        })}
+        <span aria-hidden className="absolute -inset-y-[3px] w-px bg-faint" style={{ left: `${policy.reviewAt * 100}%` }} />
+        <span aria-hidden className="absolute -inset-y-[3px] w-px bg-foreground" style={{ left: `${policy.holdAt * 100}%` }} />
+      </span>
+      <span className={cn("font-mono text-[11px] tabular", item.verdict === "hold" ? "text-found" : item.verdict === "review" ? "text-warning" : "text-faint")}>{item.score.toFixed(2)}</span>
+    </span>
+  );
+}
+
 export function ScreenPanel({ feed, busy, onStart, onDecide }: { feed: Feed | null | undefined; busy: string | null; onStart: () => void; onDecide: (id: string, d: "release" | "block") => void }) {
   const items = feed?.items ?? [];
   const waiting = items.filter((i) => i.status === "held" || i.status === "awaiting");
   // One payment to decide at a time, the one waiting longest; the rest of the feed is a log.
   const first = waiting.at(-1);
-  const rows = [...(first ? [first] : []), ...items.filter((i) => i !== first)].slice(0, 4);
+  const rows = [...(first ? [first] : []), ...items.filter((i) => i !== first)].slice(0, first ? 3 : 4);
+  // The checks light for the payment just screened, then for the one in front of you.
+  const current = feed?.running ? items[0] : (first ?? items[0]);
   return (
-    <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_260px]">
+    <div className="grid grid-cols-1 gap-x-10 gap-y-6 lg:grid-cols-[minmax(0,1fr)_250px]">
       <div className="min-w-0 max-w-3xl">
         {rows.length === 0 ? (
           <p className="font-mono text-[13px] text-muted-foreground">The next ten payments from the bank feed, each screened the moment it arrives.</p>
@@ -314,7 +395,10 @@ export function ScreenPanel({ feed, busy, onStart, onDecide }: { feed: Feed | nu
               return (
                 <li
                   key={item.id}
-                  className={cn("animate-fade-up grid grid-cols-[1fr_auto] gap-x-4 border-b py-2 last:border-b-0 sm:grid-cols-[4.5rem_1fr_auto]", item.status === "blocked" && "opacity-60")}
+                  className={cn(
+                    "animate-fade-up grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 border-b py-2 last:border-b-0 sm:grid-cols-[4.5rem_minmax(0,1fr)_7.5rem_auto]",
+                    item.status === "blocked" && "opacity-60",
+                  )}
                 >
                   <span className="hidden pt-0.5 font-mono text-[11px] text-faint sm:block">{clock(item.at)}</span>
                   <div className="min-w-0">
@@ -346,6 +430,7 @@ export function ScreenPanel({ feed, busy, onStart, onDecide }: { feed: Feed | nu
                       </>
                     )}
                   </div>
+                  <span className="hidden pt-1 sm:block">{feed && <ScoreBar item={item} policy={feed.policy} />}</span>
                   <span className={cn("figure tabular text-[14px]", item.transactionType === "CREDIT" && "text-signal")}>
                     {item.transactionType === "CREDIT" ? "+" : ""}
                     {format(item.amountCents)}
@@ -356,30 +441,37 @@ export function ScreenPanel({ feed, busy, onStart, onDecide }: { feed: Feed | nu
           </ol>
         )}
       </div>
-      <aside className="grid content-start gap-5">
+      <aside className="grid content-start gap-3">
         {feed && (
-          <dl className="grid gap-1.5 font-mono text-[12px]">
-            <p className="label mb-1">autopilot</p>
-            <Rule k="holds at risk" v={feed.policy.holdAt.toFixed(2)} />
-            <Rule k="flags at risk" v={feed.policy.reviewAt.toFixed(2)} />
-            <Rule k="asks you above" v={format(feed.policy.approvalLimitCents)} />
-          </dl>
+          <div>
+            <div className="mb-1.5 flex items-baseline gap-3 font-mono text-[11px] text-faint">
+              <span>checks on every payment</span>
+              <span className="leader" />
+            </div>
+            <ul className="grid grid-cols-1 gap-[3px] font-mono text-[11px] leading-[15px]">
+              {CHECKS.map((c) => {
+                const hit = current?.signals.find((sig) => sig.signal === c.signal);
+                return (
+                  <li key={c.signal} className={cn("flex items-baseline gap-2 transition-colors duration-300", hit ? "text-foreground" : "text-faint")}>
+                    <span className="truncate">{c.name}</span>
+                    <span className="leader" />
+                    <span className={cn("tabular", hit && current && (current.verdict === "hold" ? "text-found" : current.verdict === "review" ? "text-warning" : "text-foreground"))}>
+                      +{(hit?.weight ?? c.weight).toFixed(2)}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+            <p className="mt-2 border-t pt-2 font-mono text-[11px] leading-[15px] text-muted-foreground" title={`Clear payments over ${format(feed.policy.approvalLimitCents)} also wait for you`}>
+              holds at <span className="tabular text-foreground">{feed.policy.holdAt.toFixed(2)}</span> · flags at <span className="tabular text-foreground">{feed.policy.reviewAt.toFixed(2)}</span>
+            </p>
+          </div>
         )}
-        <Button size="lg" variant={items.length ? "outline" : "default"} disabled={busy !== null || Boolean(feed?.running) || !feed} onClick={onStart}>
+        <Button size="lg" className="justify-self-start" variant={items.length ? "outline" : "default"} disabled={busy !== null || Boolean(feed?.running) || !feed} onClick={onStart}>
           {feed?.running ? `Screening ${feed.cursor}/${feed.total}` : items.length ? "Replay the feed" : "Start the feed"}
           {!feed?.running && <span className="text-[11px] opacity-60">↵</span>}
         </Button>
       </aside>
-    </div>
-  );
-}
-
-function Rule({ k, v }: { k: string; v: string }) {
-  return (
-    <div className="flex items-baseline gap-2">
-      <dt className="text-muted-foreground">{k}</dt>
-      <span className="leader" />
-      <dd className="tabular">{v}</dd>
     </div>
   );
 }
@@ -398,7 +490,7 @@ export function AskPanel({ asks, busy, onAsk }: { asks: Ask[] | undefined; busy:
   };
   const suggestions = SUGGESTIONS.filter((s) => s !== latest?.question);
   return (
-    <div className="grid gap-x-12 gap-y-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+    <div className="grid grid-cols-1 gap-x-12 gap-y-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
       <div className="min-w-0">
         <form
           className="flex items-center gap-3 border-b pb-3"
@@ -426,15 +518,17 @@ export function AskPanel({ asks, busy, onAsk }: { asks: Ask[] | undefined; busy:
         {latest && (
           <div key={latest.id} className="animate-fade-up pt-3">
             <p className="text-[14px]">{latest.question}</p>
-            <ol className="mt-1.5 grid gap-0.5 font-mono text-[11.5px] text-faint">
+            <ol className="mt-1.5 grid grid-cols-1 gap-0.5 font-mono text-[11px] leading-[16px]">
               {latest.steps.map((s, i) => (
-                <li key={i} className="animate-fade-up">
-                  → {s.summary}
+                <li key={i} className="animate-fade-up flex items-baseline gap-2" title={s.summary}>
+                  <span className="shrink-0 text-signal">{s.tool}</span>
+                  <span className="min-w-0 truncate text-faint">{s.summary}</span>
                 </li>
               ))}
               {thinking && (
                 <li className="text-signal">
-                  reading the books<span className="cursor-blink">_</span>
+                  {latest.steps.length ? "reading the results" : "choosing a tool"}
+                  <span className="cursor-blink">_</span>
                 </li>
               )}
             </ol>
@@ -454,7 +548,28 @@ export function AskPanel({ asks, busy, onAsk }: { asks: Ask[] | undefined; busy:
           </div>
         )}
       </div>
-      <div className="min-w-0">{latest && <Answer ask={latest} />}</div>
+      <div className="min-w-0">{latest?.answer || latest?.status === "failed" ? <Answer ask={latest} /> : <Tools used={latest?.steps.map((s) => s.tool) ?? []} />}</div>
+    </div>
+  );
+}
+
+/** What the agent can reach: read-only tools that compute in code and return cited records. */
+function Tools({ used }: { used: string[] }) {
+  return (
+    <div className="animate-fade-up">
+      <div className="mb-1.5 flex items-baseline gap-3 font-mono text-[11px] text-faint">
+        <span>the agent&apos;s tools</span>
+        <span className="leader" />
+        <span>read-only · sums in code</span>
+      </div>
+      <ul className="grid grid-cols-1 gap-x-6 gap-y-[3px] font-mono text-[11px] leading-[15px] sm:grid-cols-2">
+        {TOOLS.map((t) => (
+          <li key={t} className={cn("transition-colors duration-300", used.includes(t) ? "text-signal" : "text-faint")}>
+            {t}
+            <span className="text-faint">()</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -476,7 +591,7 @@ function Answer({ ask }: { ask: Ask }) {
         })}
       </p>
       {ask.citations.length > 0 && (
-        <ol className="mt-2.5 grid gap-0.5 font-mono text-[11.5px] text-muted-foreground">
+        <ol className="mt-2.5 grid grid-cols-1 gap-0.5 font-mono text-[11.5px] text-muted-foreground">
           {ask.citations.map((c, i) => (
             <li key={c.ref} className="flex gap-2">
               <span className="text-signal">{i + 1}</span>
@@ -503,6 +618,7 @@ function Answer({ ask }: { ask: Ask }) {
           </span>
         )}
         {ask.model}
+        {ask.steps.length > 0 && ` · ${ask.steps.length} ${ask.steps.length === 1 ? "tool call" : "tool calls"}`}
       </p>
     </article>
   );

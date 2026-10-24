@@ -6,6 +6,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { resetDemoData, type EngineCtx } from "@/convex/engine";
 import schema from "@/convex/schema";
 import { answerQuestion, type ModelRunner } from "@/lib/ask/agent";
+import { TOOLS } from "@/components/overview/system";
 import { buildTools, finalizeAnswer, Registry, type BooksContext } from "@/lib/ask/tools";
 
 /* Ask your books: the tools over real stored books, grounding of answers, and the stored flow. */
@@ -26,6 +27,10 @@ const run = (name: string, input: unknown, registry = new Registry()) => {
 };
 
 describe("books tools", () => {
+  it("are the tools the overview shows", () => {
+    expect(buildTools(books, new Registry()).map((x) => x.name)).toEqual(TOOLS);
+  });
+
   it("searches transactions with an exact total", () => {
     const out = run("search_transactions", { merchant: "summit", limit: 3 });
     expect(out.matched).toBe(7);

@@ -14,8 +14,10 @@ import { Count } from "./count";
 import { Details } from "./details";
 import { FieldCanvas, TONE, type Leader, type Scene, type Tone } from "./field-canvas";
 import { focusDomains, layoutField, lineY, place, recordAt, rowOf, yOf, type Geometry } from "./geometry";
+import { Machine } from "./machine";
 import { AskPanel, BooksPanel, DecidePanel, EndPanel, InvestigatePanel, ScreenPanel } from "./panels";
 import { errorText, useLiveSource, useReplaySource, type ReplaySnapshot, type Run, type Source } from "./source";
+import { machineView, readTrace } from "./system";
 
 /*
  * The overview is the product and the demo at once: one screen, five beats. The field shows every
@@ -199,8 +201,8 @@ export function Overview({ source }: { source: Source }) {
     return () => window.removeEventListener("resize", on);
   }, []);
   const narrow = width > 0 && width < 640;
-  // The field takes what the header, statement, panel and key hints leave of the screen.
-  const g: Geometry | null = useMemo(() => (field && width ? layoutField(field, width, narrow, narrow ? 0 : Math.max(380, screenH - 440)) : null), [field, width, narrow, screenH]);
+  // The field takes what the header, statement, system line, panel and key hints leave of the screen.
+  const g: Geometry | null = useMemo(() => (field && width ? layoutField(field, width, narrow, narrow ? 0 : Math.max(320, screenH - 500)) : null), [field, width, narrow, screenH]);
 
   const run = useMemo(() => readRun(source.run, Date.now()), [source.run]);
   const running = Boolean(run?.running);
@@ -218,6 +220,13 @@ export function Overview({ source }: { source: Source }) {
 
   const leaks = useMemo(() => (field?.leaks ?? []).filter(isCredible), [field]);
   const open = useMemo(() => leaks.filter(isOpen), [leaks]);
+
+  // The run the trace shows: one started here, or the one behind the field.
+  const traced = source.run ?? source.shown;
+  const expectModel = Boolean(field?.investigation?.model ?? dashboard?.latest?.aiModel);
+  const expectLive = field?.investigation?.marketMode === "live";
+  const trace = useMemo(() => readTrace(traced, { model: expectModel, live: expectLive }, now), [traced, expectModel, expectLive, now]);
+  const tracedElapsed = traced ? ((traced.completedAt ?? (running ? now : traced.startedAt)) - traced.startedAt) : null;
 
   // Which findings the field shows: none over the bare books (or while screening and asking,
   // where the field is about other records); while an investigation runs, the ones it has
@@ -293,6 +302,11 @@ export function Overview({ source }: { source: Source }) {
     if (chapter === "ask") return items.filter((i) => cited.some((c) => c.screening === i.id));
     return [];
   }, [chapter, feed, cited]);
+
+  const machine = useMemo(
+    () => machineView({ chapter, field, trace, leaks, open, decision, feed, asks }),
+    [chapter, field, trace, leaks, open, decision, feed, asks],
+  );
 
   // ---- Field tones ------------------------------------------------------------
   const focusLeak = decision ?? (focus ? (leaks.find((l) => l.fingerprint === focus) ?? null) : null);
@@ -703,7 +717,7 @@ export function Overview({ source }: { source: Source }) {
       await sleep(3500);
       await beat("decide", 0);
       for (let i = 0; i < 2 && !stop; i++) {
-        await sleep(3200);
+        await sleep(4200);
         const d = k().decision;
         if (stop || !d || isFixed(d)) break;
         k().primary();
@@ -889,6 +903,7 @@ export function Overview({ source }: { source: Source }) {
             <h1 className="display animate-fade-up text-[clamp(1.8rem,3.2vw,2.75rem)] leading-[1.02]">{statement.big}</h1>
             <p className="animate-fade-up mt-1.5 min-h-[1.4em] text-[15px] text-muted-foreground [animation-delay:80ms]">{statement.small}</p>
           </div>
+          <Machine view={machine} reduced={reduced} />
 
           <div
             ref={box}
@@ -954,7 +969,7 @@ export function Overview({ source }: { source: Source }) {
               <FieldLabel key={l.key} label={l} focused={Boolean(l.leak && focusLeak?.fingerprint === l.leak.fingerprint)} onFocus={(f) => setFocus(f)} />
             ))}
             {g && chapter === "screen" && seam.length > 0 && (
-              <div className="halo pointer-events-none absolute right-0 grid w-[400px] max-w-full gap-px font-mono text-[11px] leading-[15px]" style={{ top: g.bottom + 24 }}>
+              <div className="halo pointer-events-none absolute right-0 grid w-[400px] max-w-full grid-cols-1 gap-px font-mono text-[11px] leading-[15px]" style={{ top: g.bottom + 24 }}>
                 {seam.slice(-3).map(({ item }) => {
                   const blocked = item.status === "blocked";
                   return (
@@ -1000,7 +1015,9 @@ export function Overview({ source }: { source: Source }) {
               <BooksPanel field={field} />
             ) : chapter === "investigate" ? (
               <InvestigatePanel
-                run={runView}
+                trace={trace}
+                elapsed={tracedElapsed}
+                running={running}
                 leaks={shown}
                 total={leaks.length}
                 busy={busy === "investigate"}
@@ -1008,7 +1025,6 @@ export function Overview({ source }: { source: Source }) {
                 onInvestigate={investigate}
                 onFocus={setFocus}
                 focus={focus}
-                field={field}
               />
             ) : chapter === "decide" ? (
               <DecidePanel
@@ -1088,7 +1104,7 @@ function Hints({ hint, className }: { hint: string[][]; className?: string }) {
 
 function Rail({ chapter, onGo, hint }: { chapter: Chapter; onGo: (c: Chapter) => void; hint: string[][] }) {
   return (
-    <div className="sticky top-14 hidden h-[calc(100vh-3.5rem)] w-44 shrink-0 flex-col pl-6 lg:flex">
+    <div className="sticky top-[57px] hidden h-[calc(100vh-57px)] w-44 shrink-0 flex-col pl-6 lg:flex">
       <nav aria-label="Demo beats" className="flex flex-1 flex-col justify-center gap-3.5">
         {CHAPTERS.map((c, i) => {
           const on = c.key === chapter;

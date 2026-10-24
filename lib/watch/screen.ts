@@ -30,6 +30,18 @@ export type SignalKey =
   | "new_payee"
   | "large_first_payment";
 
+/** The risk each check adds when it fires, heaviest first. An amount 1.75 to 3 times the usual adds the milder weight. */
+export const WEIGHTS = {
+  invoice_already_paid: 0.7,
+  lookalike_payee: 0.5,
+  duplicate_payment: 0.5,
+  amount_outlier: 0.45,
+  bank_details_changed: 0.35,
+  new_payee: 0.15,
+  large_first_payment: 0.15,
+} satisfies Record<SignalKey, number>;
+export const MILD_OUTLIER_WEIGHT = 0.25;
+
 export interface Signal {
   signal: SignalKey;
   weight: number;
@@ -149,40 +161,40 @@ export function screenPayment(payment: Payment, history: HistoryEntry[], policy:
   if (look && target) {
     add(
       "lookalike_payee",
-      0.5,
+      WEIGHTS.lookalike_payee,
       `${look.distance === 1 ? "One character" : `${look.distance} characters`} off ${target.name} (paid ${target.payments.length} times)`,
       target.payments.at(-1)?.id ?? null,
     );
   } else if (!exact) {
-    add("new_payee", 0.15, "First payment to this payee");
+    add("new_payee", WEIGHTS.new_payee, "First payment to this payee");
   }
 
   if (target && payment.payeeAccount && target.accounts.size > 0 && !target.accounts.has(payment.payeeAccount)) {
     const [usual] = [...target.accounts.entries()].sort((a, b) => b[1] - a[1]);
-    add("bank_details_changed", 0.35, `Pays account ••${payment.payeeAccount}; every earlier payment went to ••${usual[0]}`);
+    add("bank_details_changed", WEIGHTS.bank_details_changed, `Pays account ••${payment.payeeAccount}; every earlier payment went to ••${usual[0]}`);
   }
 
   const invoice = payment.invoiceReference?.trim().toUpperCase() || null;
   const paidInvoice = invoice && target ? target.payments.find((t) => t.invoiceReference?.trim().toUpperCase() === invoice) : undefined;
   if (paidInvoice) {
-    add("invoice_already_paid", 0.7, `${invoice} was already paid on ${day(paidInvoice.transactionDate.getTime())}`, paidInvoice.id);
+    add("invoice_already_paid", WEIGHTS.invoice_already_paid, `${invoice} was already paid on ${day(paidInvoice.transactionDate.getTime())}`, paidInvoice.id);
   } else if (exact) {
     const asTx: LedgerTransaction = { ...payment, transactionDate: new Date(payment.at), normalizedMerchantName: normalized };
     const dup = exact.payments
       .map((t) => ({ t, s: scoreDuplicatePair(t, asTx) }))
       .filter((x) => x.s && x.s.score >= 0.7)
       .sort((x, y) => y.s!.score - x.s!.score)[0];
-    if (dup) add("duplicate_payment", 0.5, `Same amount to the same payee on ${day(dup.t.transactionDate.getTime())}`, dup.t.id);
+    if (dup) add("duplicate_payment", WEIGHTS.duplicate_payment, `Same amount to the same payee on ${day(dup.t.transactionDate.getTime())}`, dup.t.id);
   }
 
   if (exact && exact.payments.length >= 3) {
     const usual = median(exact.payments.map((t) => t.amountCents));
     const multiple = payment.amountCents / usual;
-    if (multiple >= 3) add("amount_outlier", 0.45, `${multiple.toFixed(1)}× the usual ${format(usual)}`);
-    else if (multiple >= 1.75) add("amount_outlier", 0.25, `${multiple.toFixed(1)}× the usual ${format(usual)}`);
+    if (multiple >= 3) add("amount_outlier", WEIGHTS.amount_outlier, `${multiple.toFixed(1)}× the usual ${format(usual)}`);
+    else if (multiple >= 1.75) add("amount_outlier", MILD_OUTLIER_WEIGHT, `${multiple.toFixed(1)}× the usual ${format(usual)}`);
   }
 
-  if (!exact && payment.amountCents >= 50_000) add("large_first_payment", 0.15, `${format(payment.amountCents)} on a first payment`);
+  if (!exact && payment.amountCents >= 50_000) add("large_first_payment", WEIGHTS.large_first_payment, `${format(payment.amountCents)} on a first payment`);
 
   const score = Math.min(1, Number(signals.reduce((s, x) => s + x.weight, 0).toFixed(2)));
   const verdict = verdictFor(score, policy);

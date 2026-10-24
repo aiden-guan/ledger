@@ -70,7 +70,7 @@ Every engine step is a Convex mutation, so each timeline event, finding and appr
 | `lib/ai/` | Provider interface, Anthropic provider, deterministic provider, prompts, schemas and grounding checks. |
 | `lib/views/` | Pure builders for the dashboard and finding detail shapes, shared by Convex queries and the UI. |
 | `lib/field/` | The overview's field: every record with its day and amount, and the records, cost change and competitor prices each finding rests on. `convex/field.ts` serves it live; the offline preview builds the same shape. |
-| `components/overview/` | The overview: five beats (books, investigate, decide, screen, ask) over one canvas field, fed by live Convex subscriptions or by an offline replay of the engine. |
+| `components/overview/` | The overview: five beats (books, investigate, decide, screen, ask) over one canvas field, with a line of the system's parts (`system.ts`, `machine.tsx`) that light as they work, fed by live Convex subscriptions or by an offline replay of the engine. |
 | `lib/river/` | Spending streams (product costs, shipping, team, marketing, software, overhead) used by the dashboard query and to tag findings. |
 | `lib/investigation/drafts.ts` | Builds the prepared fix for each finding (emails and price changes) from deterministic finding data only. |
 | `lib/watch/` | The payment screen and the demo bank feed. `convex/watch.ts` runs it on each arriving payment and applies the autopilot policy. |
@@ -226,11 +226,11 @@ That pushes the Convex functions and builds Next.js against the production deplo
 With `DEMO_MODE=true` (on the Convex deployment) the header shows **Reset demo** and the demo seed and reset functions run. With it off, they refuse with FORBIDDEN and the button is hidden. The suggested demo:
 
 1. Open the landing page and scroll: the tree grows from Acme Outdoor Co.'s books to its findings. Click a finding to grow twigs out to its evidence. Keep scrolling: the tree condenses into a drop that falls into still water, and two koi come up to swim the two loops described below. Then click **Open the demo**.
-2. **Books.** The overview fills in with every record of the last six months, one square each. Press → to move between beats (or click them on the left); ↵ always does the beat's one thing.
-3. **Investigate.** Press ↵. A scan line sweeps the books as the engine works through its ten steps, records it suspects turn pale orange, and each leak lights up in orange as it is measured, with its label and amount.
-4. **Decide.** One fix at a time. The field zooms to the records behind it (the bottle's sales under the supplier's cost step, the two identical Summit payments, the daypack's price against three competitors, the Relay Inbox charges), with the drafted email or price change below. Press ↵ to approve: the records turn blue and the forecast picks up the fix. → moves to the next fix.
-5. **Screen.** Press ↵ to start the bank feed. Ten payments arrive over about half a minute, each screened before it posts. The lookalike supplier, the invoice that was already paid and the payment above the approval limit stop past today's column. Press b to block or r to release.
-6. **Ask.** Click a suggestion, or press / and type. The answer cites its records, and the field pins each one.
+2. **Books.** The overview fills in with every record of the last six months, one square each. Above the field, one line shows the parts of the system: the data, the rules, Apify, Claude and you. A part lights while it works and says what it is doing, and a square travels between two parts whenever data passes; a part that has no role in a beat says so. Press → to move between beats (or click them on the left); ↵ always does the beat's one thing.
+3. **Investigate.** Press ↵. A scan line sweeps the books as the engine works through its ten steps, records it suspects turn pale orange, and each leak lights up in orange as it is measured, with its label and amount. The engine trace below logs each step as it happens: the part that ran it, the threshold it tested (read from the rules' own config), what it found and how long it took. On the live deployment Claude plans the market research and explains the findings, and Apify fetches the competitor prices in between.
+4. **Decide.** One fix at a time. The field zooms to the records behind it (the bottle's sales under the supplier's cost step, the two identical Summit payments, the daypack's price against three competitors, the Relay Inbox charges), with the drafted email or price change below and the arithmetic behind the amount beside it, line by line as the engine computed it. Press ↵ to approve: the records turn blue and the forecast picks up the fix. → moves to the next fix.
+5. **Screen.** Press ↵ to start the bank feed. Ten payments arrive over about half a minute, each screened before it posts: the seven checks light as they fire, and each payment's risk score fills against the flag and hold lines. The lookalike supplier, the invoice that was already paid and the payment above the approval limit stop past today's column. Press b to block or r to release.
+6. **Ask.** Click a suggestion, or press / and type. Each tool the agent calls appears as it calls it, the answer cites its records, and the field pins each one.
 7. Press d at any time for the engine's step timings, the inputs, the audit trail and the live subscriptions. **Reset demo** starts over.
 
 To record the walkthrough in one take, press p (or open `/overview?tour`): the overview plays every beat by itself, waiting on the engine, the feed and the agent rather than on a timer, and approves two fixes, blocks the lookalike payment and asks one question along the way. Any key hands control back.
@@ -261,15 +261,15 @@ The landing page, fully grown. The roots are the demo company's books, the trunk
 
 ![Landing page, past the tree](docs/screenshots/landing-pond.png)
 
-The overview after an investigation: 1,187 records, four leaks lit up in orange, each label pointing at the record it was measured from:
+The overview after an investigation: 1,187 records, four leaks lit up in orange, each label pointing at the record it was measured from, and the engine's trace of the run. These are from the offline replay, which runs on the rules-based narrative and the demo price dataset, so the Apify and Claude parts show as unused; on the live deployment they light up in their steps:
 
 ![Overview, investigate](docs/screenshots/overview-investigate.png)
 
-Deciding a fix: the field zooms to the bottle's sales lane, the supplier's cost step from $22 to $29 and three competitor prices, with the price change drafted below:
+Deciding a fix: the field zooms to the bottle's sales lane, the supplier's cost step from $22 to $29 and three competitor prices, with the price change drafted below and the math behind $1,872 beside it:
 
 ![Overview, decide](docs/screenshots/overview-decide.png)
 
-Screening the bank feed: the lookalike supplier, an invoice already paid and a payment above the approval limit stop before they post:
+Screening the bank feed: the lookalike supplier, an invoice already paid and a payment above the approval limit stop before they post. The checks that fired for the payment in front of you are lit on the right:
 
 ![Overview, screen](docs/screenshots/overview-screen.png)
 
