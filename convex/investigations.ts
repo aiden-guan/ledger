@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { toFindingListItem } from "../lib/views/dashboard";
 import { internal } from "./_generated/api";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { createInvestigationRecord } from "./data";
 import { apiError, currentOrganization, serializeEvent, serializeInvestigation } from "./model";
 
@@ -15,6 +15,18 @@ export const start = mutation({
     if (!alreadyRunning) await ctx.scheduler.runAfter(0, internal.engine.run, { investigationId: id });
     const inv = await ctx.db.get(id);
     return { investigation: serializeInvestigation(inv!), alreadyRunning };
+  },
+});
+
+/** The daily run from convex/crons.ts: the same investigation, started by the schedule. */
+export const scheduled = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const org = await currentOrganization(ctx);
+    if (!org) return null;
+    const { id, alreadyRunning } = await createInvestigationRecord(ctx, org._id, "SCHEDULED");
+    if (!alreadyRunning) await ctx.scheduler.runAfter(0, internal.engine.run, { investigationId: id });
+    return id;
   },
 });
 

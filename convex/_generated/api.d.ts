@@ -11,6 +11,7 @@
   import type { ApiFromModules, FilterApi, FunctionReference } from "convex/server";
   import type * as agent from "../agent.js";
 import type * as ask from "../ask.js";
+import type * as crons from "../crons.js";
 import type * as dashboard from "../dashboard.js";
 import type * as data from "../data.js";
 import type * as engine from "../engine.js";
@@ -32,6 +33,7 @@ import type * as watch from "../watch.js";
   declare const fullApi: ApiFromModules<{
     "agent": typeof agent,
 "ask": typeof ask,
+"crons": typeof crons,
 "dashboard": typeof dashboard,
 "data": typeof data,
 "engine": typeof engine,

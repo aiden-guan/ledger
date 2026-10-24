@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test";
 import { beforeAll, describe, expect, it, vi } from "vitest";
-import { api } from "@/convex/_generated/api";
+import { api, internal } from "@/convex/_generated/api";
 import { resetDemoData, type EngineCtx } from "@/convex/engine";
 import schema from "@/convex/schema";
 
@@ -65,5 +65,13 @@ describe("live feed", () => {
 
   it("rejects a policy where flagging sits above holding", async () => {
     await expect(t.mutation(api.watch.setPolicy, { holdAt: 0.4, reviewAt: 0.6, approvalLimitCents: 0 })).rejects.toThrow();
+  });
+});
+
+describe("daily schedule", () => {
+  it("starts a scheduled investigation", async () => {
+    const id = await t.mutation(internal.investigations.scheduled, {});
+    const inv = await t.run((c) => c.db.get(id!));
+    expect(inv).toMatchObject({ triggerType: "SCHEDULED", status: "CREATED" });
   });
 });
