@@ -15,6 +15,8 @@ export default defineSchema({
     industry: v.string(),
     currency: v.string(),
     demoMode: v.boolean(),
+    /** Bank balance before the first recorded transaction; anchors the cash forecast. */
+    openingBalanceCents: v.optional(v.number()),
   }).index("by_slug", ["slug"]),
 
   products: defineTable({
@@ -159,6 +161,53 @@ export default defineSchema({
     rejectedAt: v.union(v.number(), v.null()),
     decidedAt: v.union(v.number(), v.null()),
   }).index("by_finding", ["findingId"]),
+
+  // ---- Live feed (the fast loop) --------------------------------------------
+
+  /** One per organization: the feed's replay cursor and the autopilot policy. */
+  watch: defineTable({
+    organizationId: v.id("organizations"),
+    running: v.boolean(),
+    cursor: v.number(),
+    /** Identifies the current replay so ticks scheduled by an earlier one are ignored. */
+    runId: v.number(),
+    policy: v.object({ holdAt: v.number(), reviewAt: v.number(), approvalLimitCents: v.number() }),
+  }).index("by_org", ["organizationId"]),
+
+  /** Every payment the feed delivered, with the screen's verdict and what happened to it. */
+  screenings: defineTable({
+    organizationId: v.id("organizations"),
+    seq: v.number(),
+    at: v.number(),
+    merchantName: v.string(),
+    amountCents: v.number(),
+    transactionType: v.union(v.literal("DEBIT"), v.literal("CREDIT")),
+    category: v.union(v.string(), v.null()),
+    invoiceReference: v.union(v.string(), v.null()),
+    payeeAccount: v.union(v.string(), v.null()),
+    verdict: v.union(v.literal("clear"), v.literal("review"), v.literal("hold")),
+    score: v.number(),
+    signals: v.array(v.object({ signal: v.string(), weight: v.number(), detail: v.string(), ref: v.union(v.string(), v.null()) })),
+    payee: v.union(v.null(), v.object({ name: v.string(), payments: v.number(), lookalike: v.boolean() })),
+    status: v.union(v.literal("posted"), v.literal("flagged"), v.literal("held"), v.literal("awaiting"), v.literal("released"), v.literal("blocked")),
+    transactionId: v.union(v.id("transactions"), v.null()),
+    decidedAt: v.union(v.number(), v.null()),
+  }).index("by_org", ["organizationId", "seq"]),
+
+  // ---- Ask your books ---------------------------------------------------------
+
+  asks: defineTable({
+    organizationId: v.id("organizations"),
+    question: v.string(),
+    status: v.union(v.literal("thinking"), v.literal("done"), v.literal("failed")),
+    steps: v.array(v.object({ tool: v.string(), summary: v.string() })),
+    answer: v.union(v.string(), v.null()),
+    citations: v.array(v.object({ ref: v.string(), label: v.string(), href: v.union(v.string(), v.null()) })),
+    /** Dollar figures in the answer, and how many of them appear in tool results. */
+    figures: v.union(v.null(), v.object({ total: v.number(), traced: v.number() })),
+    model: v.union(v.string(), v.null()),
+    error: v.union(v.string(), v.null()),
+  }).index("by_org", ["organizationId"]),
 
   auditLog: defineTable({
     organizationId: v.id("organizations"),

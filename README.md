@@ -16,6 +16,15 @@ The seeded demo company, **Acme Outdoor Co.**, has four leaks for LedgerLens to 
 
 These figures are computed by the engine from the seeded records on every run. They are not hardcoded in the UI, and the test suite asserts them.
 
+### Two loops
+
+The investigation above is the **slow loop**: it reads six months of books, gathers market evidence and writes findings. Beside it runs a **fast loop** for money as it moves:
+
+- **Live feed.** Payments arrive from the bank feed and each one is screened inside the Convex mutation that receives it, before it posts (`lib/watch/screen.ts`). Signals: a payee name one or two keystrokes from a known payee (Damerau-Levenshtein, plus lookalike characters such as `1` for `l`), a receiving account that differs from every earlier payment, an invoice number that was already paid, a duplicate of a recent payment, an amount far above the payee's median, and a large first payment. The demo feed includes an impersonator invoicing as the packaging supplier with new bank details, a second payment of an invoice already paid, and an ad charge 3.7 times the usual.
+- **Autopilot, inside limits.** The owner sets three limits: the risk score at which a payment is held, the score at which it posts but is flagged, and the amount above which even a clean payment waits for approval. Autopilot acts only inside those limits and records every action in the audit log as the agent; held and escalated payments wait for a person to release or block them.
+- **Cash forecast.** Cash today and for the next 90 days (`lib/finance/forecast.ts`): fixed charges on their own cycle, everything else at its trailing 90-day rate, with approved fixes as a solid line and the rest dashed. Approving a fix moves money from one line to the other.
+- **Ask your books.** Questions are answered by Claude through read-only tools that compute in code and return money already formatted (`lib/ask/tools.ts`): transaction search with exact totals, vendor history, findings, the live feed, the forecast, product economics and category spend. Each tool call appears live as a step. Answers must cite the records behind each claim; citations to records no tool returned are dropped, and every dollar figure in the answer is checked against the tool results and shown as traced or not.
+
 ## Architecture
 
 ```
@@ -40,7 +49,7 @@ These figures are computed by the engine from the seeded records on every run. T
                             │ │ pure TS    │ │ Apify or   │ │ Zod-checked│   │
                             │ └────────────┘ │ fixtures   │ │ narratives │   │
                             │                └───┬────────┘ └────────────┘   │
-                            │ tables: 15, indexed by organization            │
+                            │ tables: 18, indexed by organization            │
                             └────────────────────┼───────────────────────────┘
                                                  ▼
                                  ┌───────────────────────────────┐
@@ -62,6 +71,9 @@ Every engine step is a Convex mutation, so each timeline event, finding and appr
 | `lib/views/` | Pure builders for the dashboard and finding detail shapes, shared by Convex queries and the UI. |
 | `lib/river/` | Stream definitions shared by the server query that measures the river and the animated SVG that draws it. |
 | `lib/investigation/drafts.ts` | Builds the prepared fix for each finding (emails and price changes) from deterministic finding data only. |
+| `lib/watch/` | The payment screen and the demo bank feed. `convex/watch.ts` runs it on each arriving payment and applies the autopilot policy. |
+| `lib/ask/` | Books tools, answer grounding and the vendor-neutral agent loop. `convex/ask.ts` stores questions; `convex/agent.ts` runs Claude's tool loop. |
+| `lib/finance/forecast.ts` | The 90-day cash forecast. |
 | `lib/demo/` | Demo catalog and the seeded generator for 182 days of records. |
 | `apify/ledgerlens-competitor-pricing/` | The Apify Actor. |
 | `app/market/[competitor]/[product]` | Sandbox competitor storefront pages with schema.org JSON-LD. The seeded competitor listings point here, so live mode exercises a real Apify crawl without scraping third-party shops. The prices on these pages are set by the demo, so results from them are labeled "Demo storefront" and never presented as market data. |

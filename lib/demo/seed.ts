@@ -1,4 +1,5 @@
 import { normalizeMerchantName } from "@/lib/finance/merchants";
+import { PAYEE_ACCOUNTS } from "@/lib/watch/script";
 import { COMPETITORS, DEMO_DAYS, DEMO_ORG, EXPECTED, MARKET_LISTINGS, PRODUCTS, marketPath } from "./catalog";
 
 /** Deterministic PRNG (mulberry32) so every seed produces identical data. */
@@ -174,7 +175,7 @@ export function generateDemoData(options: SeedOptions = {}): DemoData {
         invoiceReference,
         source: "bank_feed",
         externalId: `bank-${String(externalSeq++).padStart(5, "0")}`,
-        metadata,
+        metadata: PAYEE_ACCOUNTS[merchantName] ? { ...metadata, payeeAccount: PAYEE_ACCOUNTS[merchantName] } : metadata,
       });
     };
 

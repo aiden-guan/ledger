@@ -9,6 +9,8 @@ export const DEMO_ORG = {
   name: "Acme Outdoor Co.",
   industry: "E-commerce: outdoor gear",
   currency: "USD",
+  /** Bank balance before the first seeded transaction. */
+  openingBalanceCents: 1_150_000,
 } as const;
 
 export interface CatalogProduct {

@@ -57,4 +57,13 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   "recommendation.rejected": "Recommendation rejected",
   "recommendation.ready_for_execution": "Marked ready for execution",
   "demo.reset": "Demo data restored",
+  "feed.started": "Bank feed replay started",
+  "payment.held": "Payment held before posting",
+  "payment.flagged": "Payment posted and flagged",
+  "payment.escalated": "Payment sent for approval",
+  "payment.released": "Payment released",
+  "payment.blocked": "Payment blocked",
+  "autopilot.updated": "Autopilot limits changed",
+  "ask.answered": "Question answered",
+  "ask.failed": "Question not answered",
 };

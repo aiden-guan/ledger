@@ -206,7 +206,7 @@ export const findOrganizationBySlug = internalQuery({
   },
 });
 
-const ORG_TABLES = ["sales", "transactions", "supplierCosts", "competitorProducts", "externalPriceObservations", "products", "competitors", "auditLog"] as const;
+const ORG_TABLES = ["screenings", "watch", "asks", "sales", "transactions", "supplierCosts", "competitorProducts", "externalPriceObservations", "products", "competitors", "auditLog"] as const;
 
 /**
  * Deletes up to `budget` documents belonging to an organization. Called repeatedly by the demo

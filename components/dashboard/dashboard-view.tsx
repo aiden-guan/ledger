@@ -6,6 +6,9 @@ import { AppHeader } from "@/components/layout/app-header";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { FindingCard } from "@/components/findings/finding-card";
 import { RevenueChart } from "@/components/dashboard/revenue-chart";
+import { ForecastChart } from "@/components/dashboard/forecast-chart";
+import { LiveFeed, type Feed } from "@/components/watch/live-feed";
+import { AskPanel, type Ask } from "@/components/ask/ask-panel";
 import { InvestigationStage } from "@/components/investigation/investigation-stage";
 import { SeedDemoPanel } from "@/components/dashboard/empty-states";
 import { RelativeTime } from "@/components/financial/relative-time";
@@ -20,7 +23,7 @@ export function DashboardView({ preloaded }: { preloaded: Preloaded<typeof api.d
   return <DashboardContent data={usePreloadedQuery(preloaded)} />;
 }
 
-export function DashboardContent({ data }: { data: DashboardData | null }) {
+export function DashboardContent({ data, preview }: { data: DashboardData | null; preview?: { feed: Feed; asks: Ask[] } }) {
   if (!data) {
     return (
       <>
@@ -92,18 +95,29 @@ export function DashboardContent({ data }: { data: DashboardData | null }) {
 
           <aside>
             <p className="label border-b pb-3">
-              <span className="text-foreground">03</span> &nbsp;last 30 days
+              <span className="text-foreground">03</span> &nbsp;cash
             </p>
             <dl className="mt-4 grid gap-1.5 font-mono text-[13px]">
-              <Stat label="revenue" value={format(overview.revenue30Cents)} note={`${revenueChange >= 0 ? "+" : ""}${revenueChange.toFixed(1)}%`} />
+              {data.forecast && <Stat label="in the bank" value={format(data.forecast.balanceCents)} />}
+              <Stat label="revenue, 30d" value={format(overview.revenue30Cents)} note={`${revenueChange >= 0 ? "+" : ""}${revenueChange.toFixed(1)}%`} />
               <Stat label="gross margin" value={`${overview.grossMargin30Pct.toFixed(1)}%`} />
-              <Stat label="orders" value={String(overview.orders30)} />
+              <Stat label="orders, 30d" value={String(overview.orders30)} />
             </dl>
-            <div className="mt-6">
-              <RevenueChart months={overview.months} />
+            <div className="mt-8">
+              {data.forecast ? (
+                <>
+                  <p className="label mb-3">next 90 days</p>
+                  <ForecastChart forecast={data.forecast} />
+                </>
+              ) : (
+                <RevenueChart months={overview.months} />
+              )}
             </div>
           </aside>
         </section>
+
+        <LiveFeed preview={preview?.feed} />
+        <AskPanel preview={preview?.asks} />
       </main>
       <SiteFooter />
     </>

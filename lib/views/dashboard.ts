@@ -1,4 +1,5 @@
 import type { FindingType, InvestigationStatus, Organization, RecommendationStatus } from "@/lib/domain";
+import { forecastCash, type CashFlow, type CashForecast } from "@/lib/finance/forecast";
 import { weightedConfidence } from "@/lib/finance/impact";
 import { STREAMS, streamForCategory, streamForFinding, type LeakStream, type StreamKey } from "@/lib/river/streams";
 
@@ -72,6 +73,7 @@ export interface DashboardData {
     months: MonthlyOverview[];
   };
   river: RiverData;
+  forecast: CashForecast | null;
 }
 
 export interface FindingRow {
@@ -191,6 +193,18 @@ export interface DashboardInput {
   lastFailure: { id: string; message: string | null; startedAt: number } | null;
   findings: FindingListItem[];
   overview: OverviewInput;
+  cash: { openingBalanceCents: number; flows: CashFlow[] };
+}
+
+/** Fixes that count toward the forecast: credible ones nobody rejected. */
+export function forecastFixes(findings: FindingListItem[]) {
+  return findings
+    .filter((f) => f.status !== "NEEDS_REVIEW" && f.recommendationStatus !== "REJECTED")
+    .map((f) => ({
+      monthlyCents: f.recoveryKind === "one_time" ? 0 : f.monthlyImpactCents,
+      oneTimeCents: f.recoveryKind === "one_time" ? f.annualImpactCents : 0,
+      approved: f.recommendationStatus === "APPROVED" || f.recommendationStatus === "READY_FOR_EXECUTION",
+    }));
 }
 
 export function buildDashboard(input: DashboardInput): DashboardData {
@@ -231,6 +245,7 @@ export function buildDashboard(input: DashboardInput): DashboardData {
     overallConfidence: weightedConfidence(credible.map((f) => ({ confidence: f.confidence, annualCents: f.annualImpactCents }))),
     overview,
     river,
+    forecast: input.cash.flows.length ? forecastCash({ openingBalanceCents: input.cash.openingBalanceCents, flows: input.cash.flows, fixes: forecastFixes(findings) }) : null,
   };
 }
 

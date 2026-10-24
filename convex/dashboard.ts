@@ -1,3 +1,4 @@
+import { merchantKey } from "../lib/finance/merchants";
 import { buildDashboard, toFindingListItem, type DashboardData } from "../lib/views/dashboard";
 import type { Doc } from "./_generated/dataModel";
 import { query } from "./_generated/server";
@@ -90,6 +91,16 @@ export const get = query({
         sales: sales.map((s) => ({ productId: s.productId, soldAt: s.soldAt, quantity: s.quantity, revenue: s.grossRevenueCents, orderId: s.orderId })),
         costs: costs.map((c) => ({ productId: c.productId, effectiveDate: c.effectiveDate, unitCostCents: c.unitCostCents })),
         debits: transactions.filter((t) => t.transactionType === "DEBIT").map((t) => ({ date: t.transactionDate, amount: t.amountCents, category: t.category })),
+      },
+      cash: {
+        openingBalanceCents: org.openingBalanceCents ?? 0,
+        flows: transactions.map((t) => ({
+          at: t.transactionDate,
+          amountCents: t.transactionType === "CREDIT" ? t.amountCents : -t.amountCents,
+          category: t.category,
+          merchantKey: merchantKey(t.normalizedMerchantName),
+          merchantName: t.merchantName,
+        })),
       },
     });
   },

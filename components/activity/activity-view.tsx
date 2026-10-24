@@ -15,6 +15,14 @@ function describe(entry: AuditEntryDTO): string | null {
   if (entry.action === "investigation.completed" && typeof m.annualRecoveryCents === "number") {
     return `${m.findings} findings · ${format(m.annualRecoveryCents, { compact: true })} potential annual recovery`;
   }
+  if (entry.action.startsWith("payment.") && typeof m.merchant === "string" && typeof m.amountCents === "number") {
+    return `${m.merchant} · ${format(m.amountCents)} · risk ${Number(m.score ?? 0).toFixed(2)}`;
+  }
+  if (entry.action.startsWith("ask.") && typeof m.question === "string") return `"${m.question}"`;
+  if (entry.action === "autopilot.updated") {
+    const to = m.to as { holdAt: number; reviewAt: number; approvalLimitCents: number } | undefined;
+    if (to) return `hold at ${to.holdAt.toFixed(2)} · flag at ${to.reviewAt.toFixed(2)} · ask above ${format(to.approvalLimitCents, { compact: true })}`;
+  }
   if (typeof m.title === "string") return m.reason ? `${m.title} · "${m.reason}"` : m.title;
   if (typeof m.note === "string") return m.note;
   if (entry.action === "investigation.started") return `Trigger: ${String(m.triggerType ?? "manual").toLowerCase().replace(/_/g, " ")}`;
