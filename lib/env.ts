@@ -35,12 +35,15 @@ const ENV_KEYS = Object.keys(EnvSchema.shape);
 // function instance without waiting for a redeploy.
 let cached: { key: string; env: Env } | null = null;
 
-function blankToUndefined(source: NodeJS.ProcessEnv): Record<string, string | undefined> {
-  return Object.fromEntries(Object.entries(source).map(([k, v]) => [k, v === "" ? undefined : v]));
+// Each key is read by name: Convex's default (non-Node) runtime does not let process.env be
+// enumerated, so Object.entries(process.env) comes back empty there and every value falls back
+// to its default.
+function readEnv(): Record<string, string | undefined> {
+  return Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k] === "" ? undefined : process.env[k]]));
 }
 
 export function getEnv(): Env {
-  const source = blankToUndefined(process.env);
+  const source = readEnv();
   const key = ENV_KEYS.map((k) => source[k] ?? "").join("\u0000");
   if (cached?.key === key) return cached.env;
   const parsed = EnvSchema.safeParse(source);
