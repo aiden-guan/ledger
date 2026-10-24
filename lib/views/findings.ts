@@ -1,14 +1,12 @@
-import "server-only";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
-import { getDb } from "@/lib/db/client";
-import * as schema from "@/lib/db/schema";
+import type { ActionType, FindingType, RecommendationStatus } from "@/lib/domain";
 import type { Calculation, EvidenceDisplay } from "@/lib/investigation/candidates";
 
 export interface FindingDetail {
+  organization: { name: string; demoMode: boolean };
   finding: {
     id: string;
     investigationId: string;
-    findingType: schema.FindingType;
+    findingType: FindingType;
     title: string;
     summary: string;
     severity: "HIGH" | "MEDIUM" | "LOW";
@@ -40,11 +38,11 @@ export interface FindingDetail {
   }[];
   recommendation: {
     id: string;
-    actionType: schema.ActionType;
+    actionType: ActionType;
     title: string;
     description: string;
     reasoning: string;
-    status: schema.RecommendationStatus;
+    status: RecommendationStatus;
     estimatedMonthlyImpactCents: number;
     estimatedAnnualImpactCents: number;
     approvedAt: string | null;
@@ -58,42 +56,50 @@ export interface FindingDetail {
   events: { seq: number; eventType: string; message: string; createdAt: string; metadata: Record<string, unknown> }[];
 }
 
-export async function getFindingDetail(findingId: string, organizationId: string): Promise<FindingDetail | null> {
-  const db = getDb();
-  const [f] = await db
-    .select()
-    .from(schema.findings)
-    .where(and(eq(schema.findings.id, findingId), eq(schema.findings.organizationId, organizationId)));
-  if (!f) return null;
+const iso = (ms: number | null | undefined) => (ms ? new Date(ms).toISOString() : null);
 
-  const [evidenceRows, recRows, invRows, eventRows] = await Promise.all([
-    db
-      .select({ e: schema.evidence })
-      .from(schema.findingEvidence)
-      .innerJoin(schema.evidence, eq(schema.evidence.id, schema.findingEvidence.evidenceId))
-      .where(eq(schema.findingEvidence.findingId, f.id))
-      .orderBy(asc(schema.evidence.createdAt)),
-    db.select().from(schema.recommendations).where(eq(schema.recommendations.findingId, f.id)),
-    db.select().from(schema.investigations).where(eq(schema.investigations.id, f.investigationId)),
-    db
-      .select()
-      .from(schema.investigationEvents)
-      .where(eq(schema.investigationEvents.investigationId, f.investigationId))
-      .orderBy(asc(schema.investigationEvents.seq)),
-  ]);
-  const rec = recRows[0] ?? null;
-  const audit = rec
-    ? await db
-        .select()
-        .from(schema.auditLog)
-        .where(and(eq(schema.auditLog.organizationId, organizationId), inArray(schema.auditLog.entityId, [rec.id, f.id])))
-        .orderBy(desc(schema.auditLog.createdAt))
-    : [];
-  const m = f.metadataJson as Record<string, unknown>;
-  const rm = (rec?.metadataJson ?? {}) as Record<string, unknown>;
-  const inv = invRows[0];
+export interface FindingDetailInput {
+  organization: { name: string; demoMode: boolean };
+  finding: {
+    id: string;
+    investigationId: string;
+    findingType: FindingType;
+    title: string;
+    summary: string;
+    severity: "HIGH" | "MEDIUM" | "LOW";
+    confidence: number;
+    monthlyImpactCents: number;
+    annualImpactCents: number;
+    status: string;
+    createdAt: number;
+    metadata: Record<string, unknown>;
+  };
+  evidence: { id: string; evidenceType: string; title: string; description: string; sourceType: string; sourceReference: string | null; confidence: number; data: Record<string, unknown> }[];
+  recommendation: {
+    id: string;
+    actionType: ActionType;
+    title: string;
+    description: string;
+    reasoning: string;
+    status: RecommendationStatus;
+    estimatedMonthlyImpactCents: number;
+    estimatedAnnualImpactCents: number;
+    approvedAt: number | null;
+    rejectedAt: number | null;
+    metadata: Record<string, unknown>;
+  } | null;
+  audit: { id: string; action: string; actorType: string; createdAt: number; metadata: Record<string, unknown> }[];
+  investigation: { id: string; completedAt: number | null; startedAt: number };
+  events: { seq: number; eventType: string; message: string; createdAt: number; metadata: Record<string, unknown> }[];
+}
 
+export function buildFindingDetail(input: FindingDetailInput): FindingDetail {
+  const f = input.finding;
+  const m = f.metadata;
+  const rec = input.recommendation;
+  const rm = rec?.metadata ?? {};
   return {
+    organization: input.organization,
     finding: {
       id: f.id,
       investigationId: f.investigationId,
@@ -105,7 +111,7 @@ export async function getFindingDetail(findingId: string, organizationId: string
       monthlyImpactCents: f.monthlyImpactCents,
       annualImpactCents: f.annualImpactCents,
       status: f.status,
-      createdAt: f.createdAt.toISOString(),
+      createdAt: new Date(f.createdAt).toISOString(),
       explanation: String(m.explanation ?? ""),
       uncertainty: (m.uncertainty as string[]) ?? [],
       calculations: (m.calculations as Calculation[]) ?? [],
@@ -117,7 +123,7 @@ export async function getFindingDetail(findingId: string, organizationId: string
       externalIntelMode: (m.externalIntelMode as string) ?? null,
       metadata: m,
     },
-    evidence: evidenceRows.map(({ e }) => ({
+    evidence: input.evidence.map((e) => ({
       id: e.id,
       evidenceType: e.evidenceType,
       title: e.title,
@@ -125,7 +131,7 @@ export async function getFindingDetail(findingId: string, organizationId: string
       sourceType: e.sourceType,
       sourceReference: e.sourceReference,
       confidence: e.confidence,
-      display: (e.dataJson.display as EvidenceDisplay) ?? null,
+      display: (e.data.display as EvidenceDisplay) ?? null,
     })),
     recommendation: rec
       ? {
@@ -137,33 +143,45 @@ export async function getFindingDetail(findingId: string, organizationId: string
           status: rec.status,
           estimatedMonthlyImpactCents: rec.estimatedMonthlyImpactCents,
           estimatedAnnualImpactCents: rec.estimatedAnnualImpactCents,
-          approvedAt: rec.approvedAt?.toISOString() ?? null,
-          rejectedAt: rec.rejectedAt?.toISOString() ?? null,
+          approvedAt: iso(rec.approvedAt),
+          rejectedAt: iso(rec.rejectedAt),
           checklist: (rm.executionChecklist as string[]) ?? [],
           carriedForward: Boolean(rm.carriedForward),
           metadata: rm,
         }
       : null,
-    audit: audit.map((a) => ({ id: a.id, action: a.action, actorType: a.actorType, createdAt: a.createdAt.toISOString(), metadata: a.metadataJson })),
-    investigation: { id: inv.id, completedAt: inv.completedAt?.toISOString() ?? null, startedAt: inv.startedAt.toISOString() },
-    events: eventRows.map((e) => ({ seq: e.seq, eventType: e.eventType, message: e.message, createdAt: e.createdAt.toISOString(), metadata: e.metadataJson })),
+    audit: input.audit.map((a) => ({ id: a.id, action: a.action, actorType: a.actorType, createdAt: new Date(a.createdAt).toISOString(), metadata: a.metadata })),
+    investigation: { id: input.investigation.id, completedAt: iso(input.investigation.completedAt), startedAt: new Date(input.investigation.startedAt).toISOString() },
+    events: input.events.map((e) => ({ ...e, createdAt: new Date(e.createdAt).toISOString() })),
   };
 }
 
-export async function getAuditTrail(organizationId: string, limit = 100) {
-  const rows = await getDb()
-    .select()
-    .from(schema.auditLog)
-    .where(eq(schema.auditLog.organizationId, organizationId))
-    .orderBy(desc(schema.auditLog.createdAt))
-    .limit(limit);
-  return rows.map((a) => ({
-    id: a.id,
-    action: a.action,
-    actorType: a.actorType,
-    entityType: a.entityType,
-    entityId: a.entityId,
-    createdAt: a.createdAt.toISOString(),
-    metadata: a.metadataJson,
-  }));
+export interface AuditEntryDTO {
+  id: string;
+  action: string;
+  actorType: string;
+  entityType: string;
+  entityId: string | null;
+  createdAt: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface InvestigationDTO {
+  id: string;
+  status: string;
+  triggerType: string;
+  startedAt: string;
+  completedAt: string | null;
+  totalRecoveryMonthlyCents: number;
+  totalRecoveryAnnualCents: number;
+  errorMessage: string | null;
+  metadata: Record<string, unknown>;
+}
+
+export interface InvestigationEventDTO {
+  seq: number;
+  eventType: string;
+  message: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
 }

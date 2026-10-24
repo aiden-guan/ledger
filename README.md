@@ -19,47 +19,50 @@ These figures are computed by the engine from the seeded records on every run. T
 ## Architecture
 
 ```
-                        ┌──────────────────────────────────────────────┐
-  Browser               │  Next.js App Router (Vercel)                 │
-  ┌────────────┐  poll  │                                              │
-  │ Dashboard  │◄──────►│  /api/investigations  ──► after() ──┐        │
-  │ Timeline   │  1s    │  /api/findings, /api/recommendations │        │
-  │ Finding    │        │  /api/audit, /api/demo/*             │        │
-  └────────────┘        │                                      ▼        │
-                        │  ┌─────────────── Investigation engine ─────┐ │
-                        │  │ state machine: CREATED → INGESTING →     │ │
-                        │  │ ANALYZING_INTERNAL_DATA → GENERATING_    │ │
-                        │  │ HYPOTHESES → GATHERING_EXTERNAL_EVIDENCE │ │
-                        │  │ → VALIDATING_FINDINGS → CALCULATING_     │ │
-                        │  │ IMPACT → GENERATING_RECOMMENDATIONS →    │ │
-                        │  │ COMPLETED   (or FAILED)                  │ │
-                        │  └───┬──────────────┬──────────────┬────────┘ │
-                        │      │              │              │          │
-                        │  ┌───▼────────┐ ┌───▼────────┐ ┌───▼────────┐ │
-                        │  │ Finance    │ │ External   │ │ AI layer   │ │
-                        │  │ engine     │ │ intel      │ │ (Claude)   │ │
-                        │  │ int cents, │ │ Apify or   │ │ Zod-checked│ │
-                        │  │ pure TS    │ │ fixtures   │ │ narratives │ │
-                        │  └────────────┘ └───┬────────┘ └────────────┘ │
-                        └─────────┬───────────┼────────────────────────┘
-                                  │           │
-                    ┌─────────────▼──┐   ┌────▼──────────────────────────┐
-                    │ Supabase       │   │ Apify platform                │
-                    │ Postgres       │   │ ledgerlens-competitor-pricing │
-                    │ (Drizzle ORM)  │   │ CheerioCrawler → dataset      │
-                    └────────────────┘   └───────────────────────────────┘
+  Browser                      Convex deployment
+  ┌──────────────┐  live    ┌────────────────────────────────────────────────┐
+  │ Dashboard    │◄────────►│ queries     dashboard.get, investigations.     │
+  │ Timeline     │ websocket│             timeline, findings.detail, ...     │
+  │ Finding      │          │ mutations   investigations.start,              │
+  │ Audit log    │          │             recommendations.approve / reject   │
+  └──────▲───────┘          │                    │ scheduler.runAfter(0)     │
+         │ SSR preload      │                    ▼                           │
+  ┌──────┴───────┐          │ ┌──── engine.run (Node action) ──────────────┐ │
+  │ Next.js app  │          │ │ CREATED → INGESTING → ANALYZING_INTERNAL_  │ │
+  │ (Vercel)     │          │ │ DATA → GENERATING_HYPOTHESES → GATHERING_  │ │
+  │ pages, /api, │          │ │ EXTERNAL_EVIDENCE → VALIDATING_FINDINGS →  │ │
+  │ /market      │          │ │ CALCULATING_IMPACT → GENERATING_RECOMMEN-  │ │
+  │ no secrets   │          │ │ DATIONS → COMPLETED   (or FAILED)          │ │
+  └──────────────┘          │ └──┬───────────────┬───────────────┬─────────┘ │
+                            │ ┌──▼─────────┐ ┌───▼────────┐ ┌────▼───────┐   │
+                            │ │ Finance    │ │ External   │ │ AI layer   │   │
+                            │ │ int cents, │ │ intel      │ │ (Claude)   │   │
+                            │ │ pure TS    │ │ Apify or   │ │ Zod-checked│   │
+                            │ └────────────┘ │ fixtures   │ │ narratives │   │
+                            │                └───┬────────┘ └────────────┘   │
+                            │ tables: 15, indexed by organization            │
+                            └────────────────────┼───────────────────────────┘
+                                                 ▼
+                                 ┌───────────────────────────────┐
+                                 │ Apify platform                │
+                                 │ ledgerlens-competitor-pricing │
+                                 │ CheerioCrawler → dataset      │
+                                 └───────────────────────────────┘
 ```
+
+Every engine step is a Convex mutation, so each timeline event, finding and approval reaches every open browser the moment it commits. The browser never polls. The Next.js app only knows the deployment's public URL; the Anthropic and Apify keys live in the Convex deployment environment.
 
 | Path | Responsibility |
 | --- | --- |
 | `lib/finance/` | Money math in integer cents, duplicate detection, recurring-expense detection, margin analysis, pricing recommendations, impact aggregation. Pure functions with no I/O. |
-| `lib/investigation/` | State machine, step events, evidence and finding persistence, the engine that runs an investigation, and approve/reject actions. |
+| `convex/` | Schema, queries, mutations, the engine action and demo reset. `convex/_generated` is checked in; `npx convex dev` keeps it current. |
+| `lib/investigation/` | State machine, step events, the storage-agnostic engine (`InvestigationStore`), carry-forward of earlier decisions, and execution checklists. |
 | `lib/apify/` | Apify client (start, poll, fetch dataset), Zod validation of Actor output, normalization, and the labeled fixture fallback. |
 | `lib/ai/` | Provider interface, Anthropic provider, deterministic provider, prompts, schemas and grounding checks. |
-| `lib/db/` | Drizzle schema (15 tables), client and read queries. |
+| `lib/views/` | Pure builders for the dashboard and finding detail shapes, shared by Convex queries and the UI. |
 | `lib/river/` | Stream definitions shared by the server query that measures the river and the animated SVG that draws it. |
 | `lib/investigation/drafts.ts` | Builds the prepared fix for each finding (emails and price changes) from deterministic finding data only. |
-| `lib/demo/` | Demo catalog, seeded generator for 182 days of records, reset service. |
+| `lib/demo/` | Demo catalog and the seeded generator for 182 days of records. |
 | `apify/ledgerlens-competitor-pricing/` | The Apify Actor. |
 | `app/market/[competitor]/[product]` | Sandbox competitor storefront pages with schema.org JSON-LD. The seeded competitor listings point here, so live mode exercises a real Apify crawl without scraping third-party shops. The prices on these pages are set by the demo, so results from them are labeled "Demo storefront" and never presented as market data. |
 
@@ -88,54 +91,64 @@ The Actor extracts prices from JSON-LD, then meta tags, then microdata, then com
 
 If the token is missing, the run fails, times out, or returns no usable prices, LedgerLens falls back to the fixture dataset, records a warning on the investigation, and labels the evidence "Demo dataset, not live market data". It never presents fixture data as live.
 
-The seeded listings point at LedgerLens's own sandbox storefront pages. A live run against them is a real crawl, but the prices on those pages are set by the demo, so the UI labels that evidence "Demo storefront" and the investigation records `sandbox: true`. Only evidence from pages other than these sandbox pages is labeled "Live". To collect real market prices, replace the URLs in the `competitor_products` table with public product pages from real retailers.
+The seeded listings point at LedgerLens's own sandbox storefront pages. A live run against them is a real crawl, but the prices on those pages are set by the demo, so the UI labels that evidence "Demo storefront" and the investigation records `sandbox: true`. Only evidence from pages other than these sandbox pages is labeled "Live". To collect real market prices, replace the URLs in the `competitorProducts` table with public product pages from real retailers.
 
 ## Setup
 
-Requirements: Node.js 20 or newer, and a Postgres database (Supabase in production, any local Postgres for development).
+Requirements: Node.js 20 or newer and a free Convex account.
 
 ```bash
 npm install
-cp .env.example .env.local     # then edit DATABASE_URL at minimum
-npm run db:migrate
+npx convex dev                 # log in, create a deployment; writes .env.local and keeps running
+```
+
+In a second terminal, set the server-side keys on the Convex deployment. Each command prompts for the value, so keys never go into a file, the repository or your shell history:
+
+```bash
+npx convex env set DEMO_MODE true
+npx convex env set LLM_API_KEY             # optional: Anthropic key for AI narratives
+npx convex env set APIFY_TOKEN             # optional: live competitor pricing
+npx convex env set APIFY_ACTOR_ID          # e.g. your-username/ledgerlens-competitor-pricing
+npx convex env set EXTERNAL_INTEL_MODE live
 npm run demo:seed
 npm run dev                    # http://localhost:3000
 ```
+
+You can also enter them in the Convex dashboard under Settings → Environment Variables.
 
 ## Environment variables
 
 See `.env.example` for the full annotated list.
 
+**Next.js app** (`.env.local`, written by `npx convex dev`; on Vercel, set by `npx convex deploy`):
+
+| Variable | Notes |
+| --- | --- |
+| `NEXT_PUBLIC_CONVEX_URL` | Address of the Convex deployment. Public by design. |
+| `CONVEX_DEPLOYMENT` | Used by the Convex CLI in development. |
+| `CONVEX_DEPLOY_KEY` | Vercel only, for `npx convex deploy` during the build. Secret. |
+
+**Convex deployment** (`npx convex env set NAME`):
+
 | Variable | Required | Notes |
 | --- | --- | --- |
-| `DATABASE_URL` | yes | Postgres connection string. Server-only. |
-| `NEXT_PUBLIC_APP_URL` | yes in production | Public URL. Seeded competitor listings point at `<url>/market/...`. |
+| `APP_URL` | yes in production | Public URL of the Next.js app. Seeded competitor listings point at `<url>/market/...`. |
 | `LLM_PROVIDER` | no | `anthropic` (default) or `none`. |
-| `LLM_API_KEY` | no | Anthropic API key. Server-only. Without it, narratives are rules-based. |
+| `LLM_API_KEY` | no | Anthropic API key. Without it, narratives are rules-based. |
 | `LLM_MODEL` | no | Default `claude-opus-5-5`. |
-| `APIFY_TOKEN` | no | Server-only. Needed for live market data. |
+| `APIFY_TOKEN` | no | Needed for live market data. |
 | `APIFY_ACTOR_ID` | no | e.g. `your-username/ledgerlens-competitor-pricing`. |
 | `EXTERNAL_INTEL_MODE` | no | `fixture` (default) or `live`. |
-| `DEMO_MODE` | no | `true` shows Reset demo and enables `/api/demo/*`. |
+| `DEMO_MODE` | no | `true` enables Load demo and Reset demo. |
 | `INVESTIGATION_STEP_DELAY_MS` | no | Pause between steps so the timeline is readable. Default 450. |
-| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | no | Listed for completeness. The app connects to Postgres through `DATABASE_URL` on the server and does not currently read these. |
 
-Only `NEXT_PUBLIC_*` variables can reach the browser. `npm run check:bundle` scans the built client bundle for secret names and values and fails if it finds any.
-
-## Database migration
-
-The schema lives in `lib/db/schema.ts`; SQL migrations are generated into `drizzle/`.
-
-```bash
-npm run db:generate   # after changing the schema
-npm run db:migrate    # applies drizzle/*.sql to DATABASE_URL
-```
+The secret keys exist only inside Convex functions. `npm run check:bundle` scans the built client bundle for secret names and key-shaped strings and fails if it finds any.
 
 ## Demo seed
 
 ```bash
-npm run demo:seed     # creates Acme Outdoor Co. if missing
-npm run demo:reset    # deletes and recreates it, plus a baseline investigation
+npm run demo:seed     # convex run engine:seedDemo: creates Acme Outdoor Co. if missing
+npm run demo:reset    # convex run engine:resetDemo: deletes and recreates it, plus a baseline investigation
 ```
 
 The seed is deterministic (a fixed-seed PRNG) and anchored to the current date, so the 182 days of sales, transactions and supplier costs always end today. It creates 18 products, 985 sales lines, 202 transactions, 20 supplier cost records, 4 competitors and 8 competitor listings.
@@ -145,10 +158,11 @@ The **Reset demo** button in the header (demo mode only) does the same thing as 
 ## Local development
 
 ```bash
-npm run dev
+npx convex dev        # terminal 1: pushes functions on save
+npm run dev           # terminal 2
 ```
 
-A fixture-mode investigation takes about 5 seconds with the default step delay. To exercise the Actor locally against the sandbox storefront:
+After adding or removing a file in `convex/` without the CLI running, `npm run convex:codegen` refreshes `convex/_generated` offline. A fixture-mode investigation takes about 5 seconds with the default step delay. To exercise the Actor locally against the sandbox storefront:
 
 ```bash
 cd apify/ledgerlens-competitor-pricing
@@ -170,18 +184,11 @@ npm run lint
 npm run verify       # typecheck, lint, test, build, check:bundle
 ```
 
-The investigation tests run against a real Postgres database named in `.env.test` (`ledgerlens_test` by default). They seed the demo company, run complete investigations in fixture mode, and assert the exact finding values above, approval and rejection, decisions carrying forward to the next run, and fallbacks when Apify or the model fail.
+The investigation tests run the real Convex schema, queries, mutations and engine against `convex-test`'s in-memory backend, so they need no deployment or network. They seed the demo company, run complete investigations in fixture mode, and assert the exact finding values above, approval and rejection, decisions carrying forward to the next run, and fallbacks when Apify or the model fail.
 
 ## Deploying
 
-**1. Database (Supabase).** Create a project, copy the pooled connection string (Transaction mode, port 6543), and run:
-
-```bash
-DATABASE_URL="postgresql://..." npm run db:migrate
-DATABASE_URL="postgresql://..." NEXT_PUBLIC_APP_URL="https://your-app.vercel.app" npm run demo:seed
-```
-
-**2. Apify Actor.**
+**1. Apify Actor.**
 
 ```bash
 npm install -g apify-cli
@@ -190,13 +197,19 @@ cd apify/ledgerlens-competitor-pricing
 apify push
 ```
 
-Set `APIFY_ACTOR_ID` to `<username>/ledgerlens-competitor-pricing` and `APIFY_TOKEN` to an API token.
+Set `APIFY_ACTOR_ID` to `<username>/ledgerlens-competitor-pricing` and `APIFY_TOKEN` to an API token, on the production Convex deployment (`npx convex env set --prod ...`), along with `APP_URL=https://your-app.vercel.app` and `DEMO_MODE=true`.
 
-**3. App (Vercel).** Import the project, set the environment variables from `.env.example` (`DATABASE_URL`, `NEXT_PUBLIC_APP_URL`, and optionally `LLM_API_KEY`, `APIFY_TOKEN`, `APIFY_ACTOR_ID`, `EXTERNAL_INTEL_MODE=live`), and deploy. Investigations run in the background with `after()` inside the `POST /api/investigations` function, which sets `maxDuration = 300`; check that your Vercel plan allows that duration. After the first deploy, run Reset demo once so the seeded competitor URLs use the deployed `NEXT_PUBLIC_APP_URL`.
+**2. App (Vercel).** In the Convex dashboard, generate a production deploy key. Import the repository in Vercel, add `CONVEX_DEPLOY_KEY`, and set the build command to:
+
+```bash
+npx convex deploy --cmd 'npm run build'
+```
+
+That pushes the Convex functions and builds Next.js against the production deployment's URL. Then run `npx convex run --prod engine:seedDemo` (or click Load demo) so the seeded competitor URLs use the deployed `APP_URL`.
 
 ## Demo mode
 
-With `DEMO_MODE=true` the header shows **Reset demo** and `/api/demo/reset` and `/api/demo/seed` are enabled. With it off, those routes return 403 and the button is hidden. The suggested demo:
+With `DEMO_MODE=true` (on the Convex deployment) the header shows **Reset demo** and the demo seed and reset functions run. With it off, they refuse with FORBIDDEN and the button is hidden. The suggested demo:
 
 1. Open the dashboard: the money river shows where Acme Outdoor Co.'s revenue goes and how thin its profit is.
 2. Click **Investigate again** (or **Run investigation** on a fresh seed). Suspected leaks appear on the river as the agent works, then turn into measured amounts.
@@ -212,15 +225,15 @@ With `DEMO_MODE=true` the header shows **Reset demo** and `/api/demo/reset` and 
 - Data comes from the seed. There are no bank, Shopify or accounting integrations yet.
 - LedgerLens does not execute financial actions. Approval produces a checklist and marks the recommendation Ready for execution.
 - Pricing recommendations assume unit sales hold at the new price; price elasticity is not modelled, and each finding says so in its uncertainty section.
-- Investigations run inside a serverless function. A run that outlives the function is marked FAILED after 10 minutes and previous findings stay visible.
+- Investigations run as a Convex action, which has a 10-minute limit. A run that outlives it is marked FAILED on the next start and previous findings stay visible.
 - The seeded listings target the bundled sandbox storefront pages, so a live run demonstrates the crawl rather than real market prices. Pointing listings at real retailers needs comparable products chosen by hand and a check of each site's terms of service.
 
 ## Safety
 
-- **Secrets stay on the server.** `DATABASE_URL`, `LLM_API_KEY`, `APIFY_TOKEN` and `SUPABASE_SERVICE_ROLE_KEY` are read only in `server-only` modules; `npm run check:bundle` verifies the client bundle.
+- **Secrets stay on the server.** `LLM_API_KEY` and `APIFY_TOKEN` are set on the Convex deployment and read only inside Convex functions; the Next.js app never sees them. `npm run check:bundle` verifies the client bundle.
 - **SSRF protection.** URLs sent to the Actor must be http(s) on a public host. Localhost, private, link-local, CGNAT and metadata addresses are rejected in the app and again in the Actor after DNS resolution and after redirects.
-- **Validated inputs and outputs.** API bodies, Apify records and model responses are all validated with Zod. API errors use one envelope: `{ "error": { "code", "message" } }`.
-- **Human in the loop.** Recommendations stay PROPOSED until a person approves or rejects them. Each decision is written to `audit_logs`.
+- **Validated inputs and outputs.** API bodies, Convex function arguments, Apify records and model responses are all validated with Zod. API errors use one envelope: `{ "error": { "code", "message" } }`.
+- **Human in the loop.** Recommendations stay PROPOSED until a person approves or rejects them. Each decision is written to the `auditLog` table in the same transaction.
 - **Logs are redacted.** The structured JSON logger replaces any field whose name looks like a token, secret, key, password, cookie or authorization header with `[redacted]`.
 
 ## Screenshots

@@ -1,4 +1,4 @@
-import type { RiverData } from "@/lib/db/queries/dashboard";
+import type { RiverData } from "@/lib/views/dashboard";
 import type { LeakStream, StreamKey } from "./streams";
 
 export type LeakState = "suspect" | "open" | "sealed" | "dismissed";

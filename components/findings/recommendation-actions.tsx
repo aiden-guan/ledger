@@ -1,12 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useMutation } from "convex/react";
+import { ConvexError } from "convex/values";
+import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 
 /** Approve / reject controls. Approval never executes anything; it records the decision. */
 export function RecommendationActions({ recommendationId }: { recommendationId: string }) {
-  const router = useRouter();
+  const approve = useMutation(api.recommendations.approve);
+  const reject = useMutation(api.recommendations.reject);
   const [busy, setBusy] = useState<"approve" | "reject" | null>(null);
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
@@ -16,18 +19,11 @@ export function RecommendationActions({ recommendationId }: { recommendationId: 
     setBusy(kind);
     setError(null);
     try {
-      const res = await fetch(`/api/recommendations/${recommendationId}/${kind}`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(kind === "reject" && reason.trim() ? { reason: reason.trim() } : {}),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw new Error(body?.error?.message ?? "Something went wrong");
-      }
-      router.refresh();
+      // The finding page is subscribed to this record, so it updates the moment this commits.
+      if (kind === "approve") await approve({ id: recommendationId });
+      else await reject({ id: recommendationId, reason: reason.trim() || null });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong");
+      setError(e instanceof ConvexError ? String((e.data as { message?: string }).message ?? "Something went wrong") : "Something went wrong");
       setBusy(null);
     }
   }

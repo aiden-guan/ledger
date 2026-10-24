@@ -1,14 +1,10 @@
-import "server-only";
 import { isSandboxListingUrl } from "@/lib/demo/catalog";
 import { streamForCategory } from "@/lib/river/streams";
-import { and, eq, inArray, lt } from "drizzle-orm";
 import { decideInvestigationPlan, explainCandidate, getLLMProvider } from "@/lib/ai/investigator";
 import type { LLMProvider } from "@/lib/ai/provider";
 import type { InvestigationContext } from "@/lib/ai/types";
 import { getCompetitorPricing, type CompetitorPricingResult, type ListingRequest } from "@/lib/apify/competitor-pricing";
-import { getDb, type Database } from "@/lib/db/client";
-import * as schema from "@/lib/db/schema";
-import type { InvestigationStatus } from "@/lib/db/schema";
+import type { InvestigationStatus } from "@/lib/domain";
 import { getEnv } from "@/lib/env";
 import { detectDuplicateTransactions } from "@/lib/finance/duplicates";
 import { aggregateImpact, severityForAnnualImpact } from "@/lib/finance/impact";
@@ -24,14 +20,11 @@ import {
   buildSubscriptionCandidate,
   type BuiltCandidate,
 } from "./candidates";
-import { emitEvent, emitStep, transition } from "./events";
-import { createFinding, createRecommendation, findPriorDecision, saveEvidence } from "./evidence";
-import { loadLedger } from "./ledger";
-
-export type TriggerType = "MANUAL" | "SCHEDULED" | "DEMO_SEED";
+import { emitStep, transition } from "./events";
+import { buildLedger } from "./ledger";
+import type { InvestigationStore } from "./store";
 
 export interface ExecuteOptions {
-  db?: Database;
   /** Pause between steps so a person can follow the timeline. 0 in tests and seeding. */
   stepDelayMs?: number;
   /** Override the configured model (null = deterministic only). */
@@ -39,83 +32,31 @@ export interface ExecuteOptions {
   externalIntelMode?: "live" | "fixture";
 }
 
-const STALE_AFTER_MS = 10 * 60 * 1000;
+/** Investigations still "running" after this long are treated as abandoned. */
+export const STALE_AFTER_MS = 10 * 60 * 1000;
 const sleep = (ms: number) => (ms > 0 ? new Promise((r) => setTimeout(r, ms)) : Promise.resolve());
 
-/**
- * Creates an investigation record, or returns the one already running for this organization.
- */
-export async function createInvestigation(
-  organizationId: string,
-  triggerType: TriggerType,
-  db: Database = getDb(),
-): Promise<{ id: string; alreadyRunning: boolean }> {
-  const active: InvestigationStatus[] = [
-    "CREATED",
-    "INGESTING",
-    "ANALYZING_INTERNAL_DATA",
-    "GENERATING_HYPOTHESES",
-    "GATHERING_EXTERNAL_EVIDENCE",
-    "VALIDATING_FINDINGS",
-    "CALCULATING_IMPACT",
-    "GENERATING_RECOMMENDATIONS",
-  ];
-  // Investigations abandoned mid-run (e.g. a killed serverless function) are marked failed.
-  await db
-    .update(schema.investigations)
-    .set({ status: "FAILED", errorMessage: "Investigation stopped responding and was abandoned.", completedAt: new Date() })
-    .where(
-      and(
-        eq(schema.investigations.organizationId, organizationId),
-        inArray(schema.investigations.status, active),
-        lt(schema.investigations.startedAt, new Date(Date.now() - STALE_AFTER_MS)),
-      ),
-    );
-  const [running] = await db
-    .select({ id: schema.investigations.id })
-    .from(schema.investigations)
-    .where(and(eq(schema.investigations.organizationId, organizationId), inArray(schema.investigations.status, active)))
-    .limit(1);
-  if (running) return { id: running.id, alreadyRunning: true };
-
-  const [row] = await db
-    .insert(schema.investigations)
-    .values({ organizationId, triggerType, status: "CREATED" })
-    .returning({ id: schema.investigations.id });
-  await emitEvent(db, row.id, "STATE_CHANGED", "CREATED", { state: "CREATED" });
-  await db.insert(schema.auditLog).values({
-    organizationId,
-    actorType: triggerType === "MANUAL" ? "USER" : "SYSTEM",
-    action: "investigation.started",
-    entityType: "investigation",
-    entityId: row.id,
-    metadataJson: { triggerType },
-  });
-  return { id: row.id, alreadyRunning: false };
-}
-
 /** Runs the full constrained state machine for an existing investigation. */
-export async function executeInvestigation(investigationId: string, options: ExecuteOptions = {}): Promise<void> {
-  const db = options.db ?? getDb();
+export async function executeInvestigation(store: InvestigationStore, investigationId: string, options: ExecuteOptions = {}): Promise<void> {
   const env = getEnv();
   const stepDelay = options.stepDelayMs ?? env.INVESTIGATION_STEP_DELAY_MS;
   const provider = options.provider !== undefined ? options.provider : getLLMProvider();
   const intelMode = options.externalIntelMode ?? env.EXTERNAL_INTEL_MODE;
   const started = Date.now();
 
-  const [record] = await db.select().from(schema.investigations).where(eq(schema.investigations.id, investigationId));
+  const record = await store.getInvestigation(investigationId);
   if (!record) throw new Error(`Investigation ${investigationId} not found`);
   if (record.status !== "CREATED") return; // already executed or executing
   const inv = { id: record.id, organizationId: record.organizationId, status: record.status as InvestigationStatus };
   const warnings: string[] = [];
   const step = (key: Parameters<typeof emitStep>[2], status: Parameters<typeof emitStep>[3], message: string, extra: Record<string, unknown> = {}) =>
-    emitStep(db, inv.id, key, status, message, extra);
+    emitStep(store, inv.id, key, status, message, extra);
 
   try {
     // ---- INGESTING -------------------------------------------------------
-    await transition(db, inv, "INGESTING", started);
+    await transition(store, inv, "INGESTING", started);
     await step("ingest", "started", "Loading ledger");
-    const ledger = await loadLedger(db, inv.organizationId);
+    const ledger = buildLedger(await store.loadLedger(inv.organizationId));
     const stats = {
       transactions: ledger.transactions.length,
       sales: ledger.sales.length,
@@ -127,7 +68,7 @@ export async function executeInvestigation(investigationId: string, options: Exe
     await sleep(stepDelay);
 
     // ---- ANALYZING_INTERNAL_DATA ----------------------------------------
-    await transition(db, inv, "ANALYZING_INTERNAL_DATA", started);
+    await transition(store, inv, "ANALYZING_INTERNAL_DATA", started);
     await step("duplicates", "started", "Detecting duplicate transactions");
     const duplicates = detectDuplicateTransactions(ledger.transactions);
     await step("duplicates", "completed", `${stats.transactions} transactions analyzed; ${duplicates.length} likely duplicate payment${duplicates.length === 1 ? "" : "s"}`, {
@@ -151,7 +92,7 @@ export async function executeInvestigation(investigationId: string, options: Exe
     await sleep(stepDelay);
 
     // ---- GENERATING_HYPOTHESES ------------------------------------------
-    await transition(db, inv, "GENERATING_HYPOTHESES", started);
+    await transition(store, inv, "GENERATING_HYPOTHESES", started);
     await step("hypotheses", "started", "Deciding what needs external evidence");
     const analysisById = new Map(analyses.map((a) => [a.productId, a]));
     const listingsByProduct = new Map<string, typeof ledger.listings>();
@@ -195,7 +136,7 @@ export async function executeInvestigation(investigationId: string, options: Exe
     await sleep(stepDelay);
 
     // ---- GATHERING_EXTERNAL_EVIDENCE ------------------------------------
-    await transition(db, inv, "GATHERING_EXTERNAL_EVIDENCE", started);
+    await transition(store, inv, "GATHERING_EXTERNAL_EVIDENCE", started);
     const requests: ListingRequest[] = plan.value.productsToResearch.flatMap((pid) =>
       (listingsByProduct.get(pid) ?? []).map((l) => ({
         productId: l.productId,
@@ -216,7 +157,7 @@ export async function executeInvestigation(investigationId: string, options: Exe
         onProgress: (u) => step("market", "info", u.message, { apifyStatus: u.status, runId: u.runId }),
       });
       if (market.observations.length) {
-        await db.insert(schema.externalPriceObservations).values(
+        await store.savePriceObservations(
           market.observations.map((o) => ({
             organizationId: inv.organizationId,
             investigationId: inv.id,
@@ -228,10 +169,10 @@ export async function executeInvestigation(investigationId: string, options: Exe
             externalName: o.externalName,
             productUrl: o.productUrl,
             sourceUrl: o.sourceUrl,
-            capturedAt: o.capturedAt,
+            capturedAt: o.capturedAt.getTime(),
             captureMode: o.captureMode,
             apifyRunId: o.apifyRunId,
-            rawPayloadJson: o.rawPayload,
+            rawPayload: o.rawPayload,
           })),
         );
       }
@@ -272,7 +213,7 @@ export async function executeInvestigation(investigationId: string, options: Exe
     await sleep(stepDelay);
 
     // ---- VALIDATING_FINDINGS --------------------------------------------
-    await transition(db, inv, "VALIDATING_FINDINGS", started);
+    await transition(store, inv, "VALIDATING_FINDINGS", started);
     const built: BuiltCandidate[] = [];
     const tryBuild = (label: string, fn: () => BuiltCandidate) => {
       try {
@@ -316,7 +257,7 @@ export async function executeInvestigation(investigationId: string, options: Exe
     await sleep(stepDelay);
 
     // ---- CALCULATING_IMPACT ---------------------------------------------
-    await transition(db, inv, "CALCULATING_IMPACT", started);
+    await transition(store, inv, "CALCULATING_IMPACT", started);
     await step("impact", "started", "Calculating recoverable value");
     const credible = validated.filter((v) => v.result.value.credible);
     const totals = aggregateImpact(credible.map((v) => v.candidate.impact));
@@ -339,25 +280,21 @@ export async function executeInvestigation(investigationId: string, options: Exe
     await sleep(stepDelay);
 
     // ---- GENERATING_RECOMMENDATIONS -------------------------------------
-    await transition(db, inv, "GENERATING_RECOMMENDATIONS", started);
+    await transition(store, inv, "GENERATING_RECOMMENDATIONS", started);
     await step("recommend", "started", "Generating recommendations");
     let recCount = 0;
     for (const { candidate, result } of validated) {
       try {
-        await db.transaction(async (tx) => {
-          const explanation = result.value;
-          const evidenceIds = await saveEvidence(tx, inv.id, candidate.evidence);
-          const prior = await findPriorDecision(tx, inv.organizationId, candidate.ai.fingerprint, inv.id);
-          const findingStatus = !explanation.credible
-            ? "NEEDS_REVIEW"
-            : prior?.status === "REJECTED"
-              ? "DISMISSED"
-              : prior
-                ? "ACTIONED"
-                : "OPEN";
-          const findingId = await createFinding(tx, {
-            investigationId: inv.id,
-            organizationId: inv.organizationId,
+        const explanation = result.value;
+        // The deterministic engine owns the action and its numbers; the model's wording is used
+        // only when it agrees on the action type.
+        const useModelAction = result.source === "model" && explanation.recommendation.actionType === candidate.ai.proposedAction.actionType;
+        await store.saveFinding({
+          investigationId: inv.id,
+          organizationId: inv.organizationId,
+          evidence: candidate.evidence,
+          credible: explanation.credible,
+          finding: {
             findingType: candidate.ai.type,
             fingerprint: candidate.ai.fingerprint,
             title: explanation.title,
@@ -366,8 +303,6 @@ export async function executeInvestigation(investigationId: string, options: Exe
             confidence: result.confidence,
             monthlyImpactCents: candidate.impact.monthlyCents,
             annualImpactCents: candidate.impact.annualCents,
-            status: findingStatus,
-            evidenceIds,
             metadata: {
               ...candidate.metadata,
               productId: candidate.productId,
@@ -383,23 +318,16 @@ export async function executeInvestigation(investigationId: string, options: Exe
               narrativeError: result.error ?? null,
               externalIntelMode: market?.mode ?? null,
             },
-          });
-          // The deterministic engine owns the action and its numbers; the model's wording is used
-          // only when it agrees on the action type.
-          const useModelAction = result.source === "model" && explanation.recommendation.actionType === candidate.ai.proposedAction.actionType;
-          await createRecommendation(tx, {
-            findingId,
+          },
+          recommendation: {
             actionType: candidate.ai.proposedAction.actionType,
             title: candidate.ai.proposedAction.title,
             description: useModelAction ? explanation.recommendation.action : candidate.ai.proposedAction.description,
             estimatedMonthlyImpactCents: candidate.impact.monthlyCents,
             estimatedAnnualImpactCents: candidate.impact.annualCents,
             reasoning: explanation.recommendation.rationale,
-            metadata: { ...candidate.recommendationMetadata, ...(prior ? { carriedForward: true, ...prior.metadata } : {}) },
-            status: prior?.status ?? "PROPOSED",
-            approvedAt: prior?.approvedAt ?? null,
-            rejectedAt: prior?.rejectedAt ?? null,
-          });
+            metadata: candidate.recommendationMetadata,
+          },
         });
         recCount += 1;
       } catch (error) {
@@ -409,13 +337,11 @@ export async function executeInvestigation(investigationId: string, options: Exe
     await step("recommend", "completed", `${recCount} recommendation${recCount === 1 ? "" : "s"} ready for review`);
 
     // ---- COMPLETED --------------------------------------------------------
-    await db
-      .update(schema.investigations)
-      .set({
+    await store.patchInvestigation(inv.id, {
         totalRecoveryMonthlyCents: totals.monthlyCents,
         totalRecoveryAnnualCents: totals.annualCents,
-        completedAt: new Date(),
-        metadataJson: {
+        completedAt: Date.now(),
+        metadata: {
           stats,
           warnings,
           partial: warnings.length > 0,
@@ -425,17 +351,16 @@ export async function executeInvestigation(investigationId: string, options: Exe
           ai: { provider: provider?.name ?? "deterministic", model: provider?.model ?? null, planSource: plan.source, modelExplanations: modelCount },
           durationMs: Date.now() - started,
         },
-      })
-      .where(eq(schema.investigations.id, inv.id));
-    await transition(db, inv, "COMPLETED", started);
-    await emitEvent(db, inv.id, "COMPLETED", `Investigation complete. ${format(totals.annualCents)} may be recoverable per year.`, totals);
-    await db.insert(schema.auditLog).values({
+      });
+    await transition(store, inv, "COMPLETED", started);
+    await store.emitEvent(inv.id, "COMPLETED", `Investigation complete. ${format(totals.annualCents)} may be recoverable per year.`, totals);
+    await store.audit({
       organizationId: inv.organizationId,
       actorType: "AGENT",
       action: "investigation.completed",
       entityType: "investigation",
       entityId: inv.id,
-      metadataJson: { findings: recCount, annualRecoveryCents: totals.annualCents, durationMs: Date.now() - started },
+      metadata: { findings: recCount, annualRecoveryCents: totals.annualCents, durationMs: Date.now() - started },
     });
     logger.info("investigation_completed", {
       investigationId: inv.id,
@@ -454,19 +379,7 @@ export async function executeInvestigation(investigationId: string, options: Exe
       status: "failed",
       error: message,
     });
-    await db
-      .update(schema.investigations)
-      .set({ status: "FAILED", errorMessage: message, completedAt: new Date() })
-      .where(eq(schema.investigations.id, inv.id))
-      .catch(() => {});
-    await emitEvent(db, inv.id, "STATE_CHANGED", "FAILED", { state: "FAILED", error: message }).catch(() => {});
+    await store.patchInvestigation(inv.id, { status: "FAILED", errorMessage: message, completedAt: Date.now() }).catch(() => {});
+    await store.emitEvent(inv.id, "STATE_CHANGED", "FAILED", { state: "FAILED", error: message }).catch(() => {});
   }
-}
-
-/** Convenience: create and run to completion. */
-export async function runInvestigation(organizationId: string, triggerType: TriggerType = "MANUAL", options: ExecuteOptions = {}): Promise<string> {
-  const db = options.db ?? getDb();
-  const { id } = await createInvestigation(organizationId, triggerType, db);
-  await executeInvestigation(id, { ...options, db });
-  return id;
 }

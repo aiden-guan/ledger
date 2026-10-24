@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
+import { ConvexClientProvider } from "@/components/providers/convex-client-provider";
+import { CONVEX_URL } from "@/lib/convex/config";
 import "./globals.css";
 
 export const viewport = {
@@ -19,7 +21,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
       <body className="min-h-screen font-sans text-foreground antialiased">
-        {children}
+        <ConvexClientProvider url={CONVEX_URL}>{children}</ConvexClientProvider>
       </body>
     </html>
   );

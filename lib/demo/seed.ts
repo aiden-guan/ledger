@@ -1,6 +1,3 @@
-import { eq } from "drizzle-orm";
-import type { Database } from "@/lib/db/client";
-import * as schema from "@/lib/db/schema";
 import { normalizeMerchantName } from "@/lib/finance/merchants";
 import { COMPETITORS, DEMO_DAYS, DEMO_ORG, EXPECTED, MARKET_LISTINGS, PRODUCTS, marketPath } from "./catalog";
 
@@ -30,9 +27,43 @@ export interface SeedOptions {
   seed?: number;
 }
 
+export interface SeedCounts {
+  products: number;
+  sales: number;
+  transactions: number;
+  supplierCosts: number;
+  competitorListings: number;
+}
+
 export interface SeedResult {
   organizationId: string;
-  counts: { products: number; sales: number; transactions: number; supplierCosts: number; competitorListings: number };
+  counts: SeedCounts;
+}
+
+/**
+ * The full demo company as plain rows. Products are referenced by SKU and competitors by slug;
+ * the storage layer swaps those for real ids when it inserts. Timestamps are epoch milliseconds.
+ */
+export interface DemoData {
+  organization: typeof DEMO_ORG & { demoMode: true };
+  products: { sku: string; name: string; category: string | null; sellingPriceCents: number; active: true }[];
+  supplierCosts: { sku: string; supplierName: string; effectiveDate: number; unitCostCents: number; source: string }[];
+  sales: { sku: string; orderId: string; soldAt: number; quantity: number; unitPriceCents: number; grossRevenueCents: number }[];
+  transactions: {
+    transactionDate: number;
+    merchantName: string;
+    normalizedMerchantName: string;
+    amountCents: number;
+    currency: string;
+    transactionType: "DEBIT" | "CREDIT";
+    category: string | null;
+    invoiceReference: string | null;
+    source: string;
+    externalId: string | null;
+    metadata: Record<string, unknown>;
+  }[];
+  competitors: { slug: string; name: string; domain: string }[];
+  listings: { sku: string; competitorSlug: string; productUrl: string; externalName: string }[];
 }
 
 /** Units sold on day i for a product with `monthlyUnits` per 30 days (exact, evenly spread). */
@@ -40,66 +71,45 @@ function unitsOnDay(i: number, monthlyUnits: number): number {
   return Math.floor(((i + 1) * monthlyUnits) / 30) - Math.floor((i * monthlyUnits) / 30);
 }
 
-export async function deleteDemoOrganization(db: Database, slug: string = DEMO_ORG.slug): Promise<void> {
-  await db.delete(schema.organizations).where(eq(schema.organizations.slug, slug));
-}
-
-export async function seedDemoCompany(db: Database, options: SeedOptions = {}): Promise<SeedResult> {
+export function generateDemoData(options: SeedOptions = {}): DemoData {
   const anchor = startOfUtcDay(options.anchorDate ?? new Date());
   const appUrl = (options.appUrl ?? "http://localhost:3000").replace(/\/$/, "");
   const rng = createRng(options.seed ?? 20261018);
   const start = new Date(anchor.getTime() - DEMO_DAYS * DAY);
   const dayAt = (i: number, hour = 12, minute = 0) => new Date(start.getTime() + i * DAY + (hour * 60 + minute) * 60 * 1000);
 
-  return db.transaction(async (tx) => {
-    const [org] = await tx
-      .insert(schema.organizations)
-      .values({ ...DEMO_ORG, demoMode: true })
-      .returning({ id: schema.organizations.id });
-    const organizationId = org.id;
-
-    // Products
-    const productRows = await tx
-      .insert(schema.products)
-      .values(
-        PRODUCTS.map((p) => ({
-          organizationId,
-          sku: p.sku,
-          name: p.name,
-          category: p.category,
-          sellingPriceCents: p.priceCents,
-        })),
-      )
-      .returning({ id: schema.products.id, sku: schema.products.sku });
-    const productIdBySku = new Map(productRows.map((r) => [r.sku, r.id]));
+  {
+    const products: DemoData["products"] = PRODUCTS.map((p) => ({
+      sku: p.sku,
+      name: p.name,
+      category: p.category ?? null,
+      sellingPriceCents: p.priceCents,
+      active: true,
+    }));
 
     // Supplier cost history
-    const costRows: (typeof schema.supplierCosts.$inferInsert)[] = [];
+    const costRows: DemoData["supplierCosts"] = [];
     for (const p of PRODUCTS) {
-      const productId = productIdBySku.get(p.sku)!;
       costRows.push({
-        organizationId,
-        productId,
+        sku: p.sku,
         supplierName: p.supplier,
-        effectiveDate: new Date(start.getTime() - 45 * DAY),
+        effectiveDate: start.getTime() - 45 * DAY,
         unitCostCents: p.costCents,
         source: "supplier_price_list",
       });
       if (p.costChange) {
         costRows.push({
-          organizationId,
-          productId,
+          sku: p.sku,
           supplierName: p.supplier,
-          effectiveDate: new Date(anchor.getTime() - p.costChange.daysBeforeAnchor * DAY),
+          effectiveDate: anchor.getTime() - p.costChange.daysBeforeAnchor * DAY,
           unitCostCents: p.costChange.newCostCents,
           source: "supplier_invoice",
         });
       }
     }
-    await tx.insert(schema.supplierCosts).values(costRows);
 
     // Sales: exact daily units per product, occasionally grouped into 2-unit order lines.
-    const salesRows: (typeof schema.sales.$inferInsert)[] = [];
+    const salesRows: DemoData["sales"] = [];
     const revenueByDay: number[] = Array(DEMO_DAYS).fill(0);
     const unitsBySupplierMonth = new Map<string, number>();
     let orderNumber = 10_400;
@@ -129,10 +139,9 @@ export async function seedDemoCompany(db: Database, options: SeedOptions = {}): 
           orderNumber += 1;
           const soldAt = dayAt(i, 8 + Math.floor(rng() * 14), Math.floor(rng() * 60));
           salesRows.push({
-            organizationId,
-            productId: productIdBySku.get(p.sku)!,
+            sku: p.sku,
             orderId: `AC-${orderNumber}`,
-            soldAt,
+            soldAt: soldAt.getTime(),
             quantity,
             unitPriceCents: p.priceCents,
             grossRevenueCents: p.priceCents * quantity,
@@ -141,12 +150,9 @@ export async function seedDemoCompany(db: Database, options: SeedOptions = {}): 
         }
       });
     }
-    for (let k = 0; k < salesRows.length; k += 500) {
-      await tx.insert(schema.sales).values(salesRows.slice(k, k + 500));
-    }
 
     // Bank transactions
-    const txRows: (typeof schema.transactions.$inferInsert)[] = [];
+    const txRows: DemoData["transactions"] = [];
     let externalSeq = 1;
     const addTx = (
       day: number,
@@ -158,8 +164,7 @@ export async function seedDemoCompany(db: Database, options: SeedOptions = {}): 
       metadata: Record<string, unknown> = {},
     ) => {
       txRows.push({
-        organizationId,
-        transactionDate: dayAt(day, 9 + Math.floor(rng() * 8), Math.floor(rng() * 60)),
+        transactionDate: dayAt(day, 9 + Math.floor(rng() * 8), Math.floor(rng() * 60)).getTime(),
         merchantName,
         normalizedMerchantName: normalizeMerchantName(merchantName),
         amountCents,
@@ -169,7 +174,7 @@ export async function seedDemoCompany(db: Database, options: SeedOptions = {}): 
         invoiceReference,
         source: "bank_feed",
         externalId: `bank-${String(externalSeq++).padStart(5, "0")}`,
-        metadataJson: metadata,
+        metadata,
       });
     };
 
@@ -259,36 +264,30 @@ export async function seedDemoCompany(db: Database, options: SeedOptions = {}): 
       addTx(Math.min(day, DEMO_DAYS - 1), misc[k % misc.length], 1800 + Math.round(rng() * 14000), "DEBIT", "office");
     }
 
-    await tx.insert(schema.transactions).values(txRows);
 
     // Competitors and listings (sandbox storefront URLs on this app).
     const appHost = new URL(appUrl).host;
-    const competitorRows = await tx
-      .insert(schema.competitors)
-      .values(COMPETITORS.map((c) => ({ organizationId, name: c.name, domain: `${appHost}/market/${c.slug}` })))
-      .returning({ id: schema.competitors.id, name: schema.competitors.name });
-    const competitorIdBySlug = new Map(COMPETITORS.map((c) => [c.slug, competitorRows.find((r) => r.name === c.name)!.id]));
-    await tx.insert(schema.competitorProducts).values(
-      MARKET_LISTINGS.map((l) => {
-        const product = PRODUCTS.find((p) => p.sku === l.sku)!;
-        return {
-          productId: productIdBySku.get(l.sku)!,
-          competitorId: competitorIdBySlug.get(l.competitorSlug)!,
-          productUrl: `${appUrl}${marketPath(l.competitorSlug, product.slug)}`,
-          externalName: l.externalName,
-        };
-      }),
-    );
-
     return {
-      organizationId,
-      counts: {
-        products: productRows.length,
-        sales: salesRows.length,
-        transactions: txRows.length,
-        supplierCosts: costRows.length,
-        competitorListings: MARKET_LISTINGS.length,
-      },
+      organization: { ...DEMO_ORG, demoMode: true },
+      products,
+      supplierCosts: costRows,
+      sales: salesRows,
+      transactions: txRows,
+      competitors: COMPETITORS.map((c) => ({ slug: c.slug, name: c.name, domain: `${appHost}/market/${c.slug}` })),
+      listings: MARKET_LISTINGS.map((l) => {
+        const product = PRODUCTS.find((p) => p.sku === l.sku)!;
+        return { sku: l.sku, competitorSlug: l.competitorSlug, productUrl: `${appUrl}${marketPath(l.competitorSlug, product.slug)}`, externalName: l.externalName };
+      }),
     };
-  });
+  }
+}
+
+export function countDemoData(data: DemoData): SeedCounts {
+  return {
+    products: data.products.length,
+    sales: data.sales.length,
+    transactions: data.transactions.length,
+    supplierCosts: data.supplierCosts.length,
+    competitorListings: data.listings.length,
+  };
 }

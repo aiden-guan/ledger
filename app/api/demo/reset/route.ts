@@ -1,12 +1,9 @@
-import { resetDemo } from "@/lib/demo/service";
-import { getEnv } from "@/lib/env";
-import { ApiError, json, route } from "@/lib/utils/api";
+import { fetchAction } from "convex/nextjs";
+import { api } from "@/convex/_generated/api";
+import { json, route } from "@/lib/utils/api";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-export const POST = route(async () => {
-  if (!getEnv().DEMO_MODE) throw new ApiError("FORBIDDEN", "Demo reset is only available when DEMO_MODE=true");
-  const result = await resetDemo();
-  return json({ ok: true, ...result });
-});
+/** Restores the seeded company and its baseline findings. Demo mode only (enforced in Convex). */
+export const POST = route(async () => json({ ok: true, ...(await fetchAction(api.engine.resetDemo, {})) }));

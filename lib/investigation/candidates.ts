@@ -1,7 +1,7 @@
 import type { FindingCandidate } from "@/lib/ai/types";
 import { isSandboxListingUrl } from "@/lib/demo/catalog";
 import { streamForCategory } from "@/lib/river/streams";
-import type { ActionType, FindingType } from "@/lib/db/schema";
+import type { ActionType, FindingType } from "@/lib/domain";
 import type { DuplicateCandidate } from "@/lib/finance/duplicates";
 import { calculateAnnualizedImpact, oneTimeImpact, type Impact } from "@/lib/finance/impact";
 import type { SkuMarginAnalysis } from "@/lib/finance/margins";

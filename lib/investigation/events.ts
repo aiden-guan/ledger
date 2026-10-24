@@ -1,9 +1,7 @@
-import { eq } from "drizzle-orm";
-import type { Database } from "@/lib/db/client";
-import * as schema from "@/lib/db/schema";
-import type { InvestigationStatus } from "@/lib/db/schema";
+import type { InvestigationStatus } from "@/lib/domain";
 import { logger } from "@/lib/utils/logger";
 import { assertTransition, type StepKey } from "./state-machine";
+import type { InvestigationStore } from "./store";
 
 export type StepStatus = "started" | "completed" | "warning" | "failed" | "info";
 
@@ -16,47 +14,39 @@ export const EVENT_TYPES = {
   STEP_FAILED: "STEP_FAILED",
 } as const;
 
-export async function emitEvent(
-  db: Database,
-  investigationId: string,
-  eventType: string,
-  message: string,
-  metadata: Record<string, unknown> = {},
-): Promise<void> {
-  await db.insert(schema.investigationEvents).values({ investigationId, eventType, message, metadataJson: metadata });
+export function stepEventType(status: StepStatus): string {
+  return status === "started"
+    ? EVENT_TYPES.STEP_STARTED
+    : status === "completed"
+      ? EVENT_TYPES.STEP_COMPLETED
+      : status === "warning"
+        ? EVENT_TYPES.STEP_WARNING
+        : status === "failed"
+          ? EVENT_TYPES.STEP_FAILED
+          : EVENT_TYPES.STEP_PROGRESS;
 }
 
 export async function emitStep(
-  db: Database,
+  store: InvestigationStore,
   investigationId: string,
   step: StepKey,
   status: StepStatus,
   message: string,
   extra: Record<string, unknown> = {},
 ): Promise<void> {
-  const type =
-    status === "started"
-      ? EVENT_TYPES.STEP_STARTED
-      : status === "completed"
-        ? EVENT_TYPES.STEP_COMPLETED
-        : status === "warning"
-          ? EVENT_TYPES.STEP_WARNING
-          : status === "failed"
-            ? EVENT_TYPES.STEP_FAILED
-            : EVENT_TYPES.STEP_PROGRESS;
-  await emitEvent(db, investigationId, type, message, { step, status, ...extra });
+  await store.emitEvent(investigationId, stepEventType(status), message, { step, status, ...extra });
 }
 
 /** Persists a state transition and records it on the timeline. */
 export async function transition(
-  db: Database,
+  store: InvestigationStore,
   investigation: { id: string; organizationId: string; status: InvestigationStatus },
   to: InvestigationStatus,
   started: number,
 ): Promise<void> {
   assertTransition(investigation.status, to);
-  await db.update(schema.investigations).set({ status: to }).where(eq(schema.investigations.id, investigation.id));
-  await emitEvent(db, investigation.id, EVENT_TYPES.STATE_CHANGED, to, { state: to });
+  await store.patchInvestigation(investigation.id, { status: to });
+  await store.emitEvent(investigation.id, EVENT_TYPES.STATE_CHANGED, to, { state: to });
   logger.info("investigation_step", {
     investigationId: investigation.id,
     organizationId: investigation.organizationId,

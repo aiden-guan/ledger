@@ -1,4 +1,4 @@
-import type { ActionType, FindingType } from "@/lib/db/schema";
+import type { ActionType, FindingType } from "@/lib/domain";
 import type { RecoveryKind } from "@/lib/finance/impact";
 
 export interface EvidenceSummary {

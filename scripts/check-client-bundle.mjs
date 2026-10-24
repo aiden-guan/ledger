@@ -4,7 +4,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-const SECRET_NAMES = ["SUPABASE_SERVICE_ROLE_KEY", "APIFY_TOKEN", "LLM_API_KEY", "DATABASE_URL"];
+const SECRET_NAMES = ["APIFY_TOKEN", "LLM_API_KEY", "CONVEX_DEPLOY_KEY"];
 const STATIC_DIR = join(process.cwd(), ".next", "static");
 
 if (!existsSync(STATIC_DIR)) {

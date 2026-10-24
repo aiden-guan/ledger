@@ -1,35 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery } from "convex/react";
+import { ConvexError } from "convex/values";
+import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Scramble } from "@/components/financial/scramble";
 import { AsciiRiver } from "@/components/river/ascii-river";
-import type { FindingListItem, RiverData } from "@/lib/db/queries/dashboard";
+import type { FindingListItem, RiverData } from "@/lib/views/dashboard";
 import { format } from "@/lib/finance/money";
 import { INVESTIGATION_STEPS } from "@/lib/investigation/state-machine";
 import type { RiverLeak } from "@/lib/river/model";
 import type { LeakStream } from "@/lib/river/streams";
 import { cn } from "@/lib/utils/cn";
-
-interface EventDTO {
-  seq: number;
-  eventType: string;
-  message: string;
-  metadata: Record<string, unknown>;
-  createdAt: string;
-}
-
-interface InvestigationDTO {
-  id: string;
-  status: string;
-  startedAt: string;
-  completedAt: string | null;
-  errorMessage: string | null;
-  totalRecoveryAnnualCents: number;
-}
-
-const POLL_MS = 1000;
 
 function leakState(f: FindingListItem): RiverLeak["state"] {
   if (f.status === "DISMISSED" || f.status === "NEEDS_REVIEW" || f.recommendationStatus === "REJECTED") return "dismissed";
@@ -37,61 +20,27 @@ function leakState(f: FindingListItem): RiverLeak["state"] {
   return "open";
 }
 
+/**
+ * Subscribes to the live investigation timeline in Convex. Each step the engine commits is
+ * pushed to the browser immediately; there is no polling.
+ */
 function useInvestigation(activeInvestigationId: string | null) {
-  const router = useRouter();
+  const startMutation = useMutation(api.investigations.start);
   const [investigationId, setInvestigationId] = useState<string | null>(activeInvestigationId);
-  const [investigation, setInvestigation] = useState<InvestigationDTO | null>(null);
-  const [events, setEvents] = useState<EventDTO[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [now, setNow] = useState(() => Date.now());
-  const lastSeq = useRef(0);
-  const refreshed = useRef(false);
+  const timeline = useQuery(api.investigations.timeline, investigationId ? { id: investigationId } : "skip");
+  const investigation = timeline?.investigation ?? null;
+  const events = timeline?.events ?? [];
+
+  // Pick up a run started from another tab or by a schedule.
+  useEffect(() => {
+    if (activeInvestigationId && activeInvestigationId !== investigationId) setInvestigationId(activeInvestigationId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeInvestigationId]);
 
   const finished = investigation?.status === "COMPLETED" || investigation?.status === "FAILED";
-
-  const poll = useCallback(async (id: string) => {
-    const res = await fetch(`/api/investigations/${id}/events?after=${lastSeq.current}`, { cache: "no-store" });
-    if (!res.ok) {
-      const body = await res.json().catch(() => null);
-      throw new Error(body?.error?.message ?? "Could not load investigation progress");
-    }
-    const data: { investigation: InvestigationDTO; events: EventDTO[] } = await res.json();
-    if (data.events.length) {
-      lastSeq.current = data.events[data.events.length - 1].seq;
-      setEvents((prev) => [...prev, ...data.events]);
-    }
-    setInvestigation(data.investigation);
-    return data.investigation;
-  }, []);
-
-  useEffect(() => {
-    if (!investigationId) return;
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout>;
-    const loop = async () => {
-      try {
-        const inv = await poll(investigationId);
-        if (cancelled) return;
-        setError(null);
-        if (inv.status === "COMPLETED" || inv.status === "FAILED") {
-          if (!refreshed.current) {
-            refreshed.current = true;
-            router.refresh();
-          }
-          return;
-        }
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Connection problem; retrying");
-      }
-      if (!cancelled) timer = setTimeout(loop, POLL_MS);
-    };
-    loop();
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [investigationId, poll, router]);
 
   useEffect(() => {
     if (!investigationId || finished) return;
@@ -103,17 +52,11 @@ function useInvestigation(activeInvestigationId: string | null) {
     setStarting(true);
     setError(null);
     try {
-      const res = await fetch("/api/investigations", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body?.error?.message ?? "Could not start the investigation");
-      lastSeq.current = 0;
-      refreshed.current = false;
-      setEvents([]);
-      setInvestigation(null);
+      const result = await startMutation({});
       setNow(Date.now());
-      setInvestigationId(body.investigation.id);
+      setInvestigationId(result.investigation.id);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not start the investigation");
+      setError(e instanceof ConvexError ? String((e.data as { message?: string }).message ?? "Could not start the investigation") : "Could not start the investigation");
     } finally {
       setStarting(false);
     }
@@ -121,8 +64,6 @@ function useInvestigation(activeInvestigationId: string | null) {
 
   function dismiss() {
     setInvestigationId(null);
-    setInvestigation(null);
-    setEvents([]);
   }
 
   const elapsed = investigation

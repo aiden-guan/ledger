@@ -1,4 +1,4 @@
-import type { MonthlyOverview } from "@/lib/db/queries/dashboard";
+import type { MonthlyOverview } from "@/lib/views/dashboard";
 import { format } from "@/lib/finance/money";
 
 const ROWS = 8;

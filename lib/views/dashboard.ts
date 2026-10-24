@@ -1,13 +1,15 @@
-import "server-only";
-import { and, asc, desc, eq, inArray, notInArray } from "drizzle-orm";
-import { getDb } from "@/lib/db/client";
-import * as schema from "@/lib/db/schema";
+import type { FindingType, InvestigationStatus, Organization, RecommendationStatus } from "@/lib/domain";
 import { weightedConfidence } from "@/lib/finance/impact";
 import { STREAMS, streamForCategory, streamForFinding, type LeakStream, type StreamKey } from "@/lib/river/streams";
 
+/*
+ * Pure view builders: turn stored records into the shapes the UI renders. Convex queries call
+ * these, so the same logic runs whether data comes from a live subscription or a server render.
+ */
+
 export interface FindingListItem {
   id: string;
-  findingType: schema.FindingType;
+  findingType: FindingType;
   title: string;
   summary: string;
   severity: "HIGH" | "MEDIUM" | "LOW";
@@ -16,7 +18,7 @@ export interface FindingListItem {
   annualImpactCents: number;
   status: string;
   recoveryKind: string;
-  recommendationStatus: schema.RecommendationStatus | null;
+  recommendationStatus: RecommendationStatus | null;
   recommendationTitle: string | null;
   narrativeSource: string | null;
   fingerprint: string;
@@ -72,17 +74,22 @@ export interface DashboardData {
   river: RiverData;
 }
 
-const ACTIVE: schema.InvestigationStatus[] = ["COMPLETED", "FAILED"];
+export interface FindingRow {
+  id: string;
+  findingType: FindingType;
+  title: string;
+  summary: string;
+  severity: "HIGH" | "MEDIUM" | "LOW";
+  confidence: number;
+  monthlyImpactCents: number;
+  annualImpactCents: number;
+  status: string;
+  fingerprint: string;
+  metadata: Record<string, unknown>;
+}
 
-export async function listFindings(investigationId: string): Promise<FindingListItem[]> {
-  const db = getDb();
-  const rows = await db
-    .select({ finding: schema.findings, rec: schema.recommendations })
-    .from(schema.findings)
-    .leftJoin(schema.recommendations, eq(schema.recommendations.findingId, schema.findings.id))
-    .where(eq(schema.findings.investigationId, investigationId))
-    .orderBy(desc(schema.findings.annualImpactCents));
-  return rows.map(({ finding: f, rec }) => ({
+export function toFindingListItem(f: FindingRow, rec: { status: RecommendationStatus; title: string } | null): FindingListItem {
+  return {
     id: f.id,
     findingType: f.findingType,
     title: f.title,
@@ -92,61 +99,52 @@ export async function listFindings(investigationId: string): Promise<FindingList
     monthlyImpactCents: f.monthlyImpactCents,
     annualImpactCents: f.annualImpactCents,
     status: f.status,
-    recoveryKind: String(f.metadataJson.recoveryKind ?? "recurring"),
+    recoveryKind: String(f.metadata.recoveryKind ?? "recurring"),
     recommendationStatus: rec?.status ?? null,
     recommendationTitle: rec?.title ?? null,
-    narrativeSource: (f.metadataJson.narrativeSource as string) ?? null,
+    narrativeSource: (f.metadata.narrativeSource as string) ?? null,
     fingerprint: f.fingerprint,
-    stream: streamForFinding(f.findingType, f.metadataJson),
-  }));
+    stream: streamForFinding(f.findingType, f.metadata),
+  };
 }
 
-async function businessOverview(organizationId: string): Promise<{ overview: DashboardData["overview"]; river: RiverData }> {
-  const db = getDb();
-  const [sales, costs, debits] = await Promise.all([
-    db
-      .select({ productId: schema.sales.productId, soldAt: schema.sales.soldAt, quantity: schema.sales.quantity, revenue: schema.sales.grossRevenueCents, orderId: schema.sales.orderId })
-      .from(schema.sales)
-      .where(eq(schema.sales.organizationId, organizationId)),
-    db
-      .select({ productId: schema.supplierCosts.productId, effectiveDate: schema.supplierCosts.effectiveDate, unitCostCents: schema.supplierCosts.unitCostCents })
-      .from(schema.supplierCosts)
-      .where(eq(schema.supplierCosts.organizationId, organizationId))
-      .orderBy(asc(schema.supplierCosts.effectiveDate)),
-    db
-      .select({ date: schema.transactions.transactionDate, amount: schema.transactions.amountCents, category: schema.transactions.category })
-      .from(schema.transactions)
-      .where(and(eq(schema.transactions.organizationId, organizationId), eq(schema.transactions.transactionType, "DEBIT"))),
-  ]);
-  const costsByProduct = new Map<string, typeof costs>();
+export interface OverviewInput {
+  sales: { productId: string; soldAt: number; quantity: number; revenue: number; orderId: string }[];
+  /** Sorted by effectiveDate ascending. */
+  costs: { productId: string; effectiveDate: number; unitCostCents: number }[];
+  debits: { date: number; amount: number; category: string | null }[];
+}
+
+export function businessOverview({ sales, costs, debits }: OverviewInput): { overview: DashboardData["overview"]; river: RiverData } {
+  const costsByProduct = new Map<string, OverviewInput["costs"]>();
   for (const c of costs) costsByProduct.set(c.productId, [...(costsByProduct.get(c.productId) ?? []), c]);
-  const costAt = (productId: string, at: Date) => {
+  const costAt = (productId: string, at: number) => {
     const list = costsByProduct.get(productId) ?? [];
     let cost = list[0]?.unitCostCents ?? 0;
     for (const c of list) if (c.effectiveDate <= at) cost = c.unitCostCents;
     return cost;
   };
-
-  const latest = sales.reduce((m, s) => Math.max(m, s.soldAt.getTime()), 0);
+  const latest = sales.reduce((m, s) => Math.max(m, s.soldAt), 0);
   const DAY = 86_400_000;
   const end = latest ? new Date(new Date(latest).setUTCHours(23, 59, 59, 999)).getTime() : Date.now();
   const months: MonthlyOverview[] = [];
   for (let k = 5; k >= 0; k--) {
     const from = end - (k + 1) * 30 * DAY;
     const to = end - k * 30 * DAY;
-    const bucket = sales.filter((s) => s.soldAt.getTime() > from && s.soldAt.getTime() <= to);
+    const bucket = sales.filter((s) => s.soldAt > from && s.soldAt <= to);
     const revenue = bucket.reduce((sum, s) => sum + s.revenue, 0);
     const cogs = bucket.reduce((sum, s) => sum + costAt(s.productId, s.soldAt) * s.quantity, 0);
     const labelDate = new Date(to);
+    const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     months.push({
-      label: labelDate.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }),
+      label: `${MONTHS[labelDate.getUTCMonth()]} ${labelDate.getUTCDate()}`,
       revenueCents: revenue,
       grossProfitCents: revenue - cogs,
     });
   }
   const last = months[5];
   const prior = months[4];
-  const orders30 = new Set(sales.filter((s) => s.soldAt.getTime() > end - 30 * DAY).map((s) => s.orderId)).size;
+  const orders30 = new Set(sales.filter((s) => s.soldAt > end - 30 * DAY).map((s) => s.orderId)).size;
   const overview = {
     revenue30Cents: last?.revenueCents ?? 0,
     revenuePrior30Cents: prior?.revenueCents ?? 0,
@@ -159,12 +157,12 @@ async function businessOverview(organizationId: string): Promise<{ overview: Das
   // because product cost is already counted as COGS at the time of sale.
   const WINDOW = 90;
   const from = end - WINDOW * DAY;
-  const inWindow = sales.filter((s) => s.soldAt.getTime() > from && s.soldAt.getTime() <= end);
+  const inWindow = sales.filter((s) => s.soldAt > from && s.soldAt <= end);
   const revenue = inWindow.reduce((sum, s) => sum + s.revenue, 0);
   const totals = new Map<StreamKey, number>(STREAMS.map((s) => [s.key, 0]));
   totals.set("cogs", inWindow.reduce((sum, s) => sum + costAt(s.productId, s.soldAt) * s.quantity, 0));
   for (const t of debits) {
-    const at = t.date.getTime();
+    const at = t.date;
     if (at <= from || at > end || t.category === "inventory") continue;
     const key = streamForCategory(t.category);
     totals.set(key, (totals.get(key) ?? 0) + t.amount);
@@ -179,35 +177,30 @@ async function businessOverview(organizationId: string): Promise<{ overview: Das
   return { overview, river };
 }
 
-export async function getDashboardData(organization: schema.Organization): Promise<DashboardData> {
-  const db = getDb();
-  const [latestRows, activeRows, failedRows, overview] = await Promise.all([
-    db
-      .select()
-      .from(schema.investigations)
-      .where(and(eq(schema.investigations.organizationId, organization.id), eq(schema.investigations.status, "COMPLETED")))
-      .orderBy(desc(schema.investigations.completedAt))
-      .limit(1),
-    db
-      .select({ id: schema.investigations.id })
-      .from(schema.investigations)
-      .where(and(eq(schema.investigations.organizationId, organization.id), notInArray(schema.investigations.status, ACTIVE)))
-      .limit(1),
-    db
-      .select({ id: schema.investigations.id, message: schema.investigations.errorMessage, startedAt: schema.investigations.startedAt })
-      .from(schema.investigations)
-      .where(and(eq(schema.investigations.organizationId, organization.id), inArray(schema.investigations.status, ["FAILED"])))
-      .orderBy(desc(schema.investigations.startedAt))
-      .limit(1),
-    businessOverview(organization.id),
-  ]);
-  const { overview: businessStats, river } = overview;
+export interface DashboardInput {
+  organization: Organization;
+  latest: {
+    id: string;
+    completedAt: number | null;
+    totalRecoveryMonthlyCents: number;
+    totalRecoveryAnnualCents: number;
+    triggerType: string;
+    metadata: Record<string, unknown>;
+  } | null;
+  activeInvestigationId: string | null;
+  lastFailure: { id: string; message: string | null; startedAt: number } | null;
+  findings: FindingListItem[];
+  overview: OverviewInput;
+}
 
-  const latest = latestRows[0] ?? null;
-  const findings = latest ? await listFindings(latest.id) : [];
-  const meta = (latest?.metadataJson ?? {}) as Record<string, unknown>;
+export function buildDashboard(input: DashboardInput): DashboardData {
+  const { organization, latest, findings } = input;
+  const { overview, river } = businessOverview(input.overview);
+  const meta = latest?.metadata ?? {};
   const credible = findings.filter((f) => f.status !== "NEEDS_REVIEW");
-  const failure = failedRows[0];
+  const failure = input.lastFailure;
+  const intel = (meta.externalIntel as Record<string, unknown> | null) ?? null;
+  const ai = (meta.ai as Record<string, unknown> | null) ?? null;
 
   return {
     organization: {
@@ -220,23 +213,25 @@ export async function getDashboardData(organization: schema.Organization): Promi
     latest: latest
       ? {
           id: latest.id,
-          completedAt: latest.completedAt?.toISOString() ?? null,
+          completedAt: latest.completedAt ? new Date(latest.completedAt).toISOString() : null,
           totalRecoveryMonthlyCents: latest.totalRecoveryMonthlyCents,
           totalRecoveryAnnualCents: latest.totalRecoveryAnnualCents,
           stats: (meta.stats as InvestigationStats | undefined) ?? null,
-          externalIntelMode: ((meta.externalIntel as Record<string, unknown> | null)?.mode as string) ?? null,
-          externalIntelSandbox: Boolean((meta.externalIntel as Record<string, unknown> | null)?.sandbox),
-          aiModel: ((meta.ai as Record<string, unknown> | null)?.model as string) ?? null,
-          modelExplanations: Number((meta.ai as Record<string, unknown> | null)?.modelExplanations ?? 0),
+          externalIntelMode: (intel?.mode as string) ?? null,
+          externalIntelSandbox: Boolean(intel?.sandbox),
+          aiModel: (ai?.model as string) ?? null,
+          modelExplanations: Number(ai?.modelExplanations ?? 0),
           warnings: (meta.warnings as string[]) ?? [],
           triggerType: latest.triggerType,
         }
       : null,
-    activeInvestigationId: activeRows[0]?.id ?? null,
+    activeInvestigationId: input.activeInvestigationId,
     lastFailure: failure && (!latest?.completedAt || failure.startedAt > latest.completedAt) ? { id: failure.id, message: failure.message } : null,
     findings,
     overallConfidence: weightedConfidence(credible.map((f) => ({ confidence: f.confidence, annualCents: f.annualImpactCents }))),
-    overview: businessStats,
+    overview,
     river,
   };
 }
+
+export type { InvestigationStatus };

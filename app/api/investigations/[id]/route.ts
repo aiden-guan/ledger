@@ -1,12 +1,10 @@
-import { getInvestigation, serializeInvestigation } from "@/lib/db/queries/investigations";
-import { ApiError, idParam, json, requireOrganization, route, type IdContext } from "@/lib/utils/api";
+import { fetchQuery } from "convex/nextjs";
+import { api } from "@/convex/_generated/api";
+import { found, idParam, json, route, type IdContext } from "@/lib/utils/api";
 
 export const dynamic = "force-dynamic";
 
 export const GET = route(async (_request: Request, context: IdContext) => {
   const id = await idParam(context);
-  const org = await requireOrganization();
-  const inv = await getInvestigation(id, org.id);
-  if (!inv) throw new ApiError("NOT_FOUND", "Investigation not found");
-  return json({ investigation: serializeInvestigation(inv) });
+  return json({ investigation: found(await fetchQuery(api.investigations.get, { id }), "Investigation") });
 });

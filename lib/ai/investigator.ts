@@ -1,4 +1,3 @@
-import "server-only";
 import { getEnv } from "@/lib/env";
 import { logger } from "@/lib/utils/logger";
 import { AnthropicProvider } from "./anthropic";

@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge";
-import type { FindingDetail } from "@/lib/db/queries/findings";
+import type { FindingDetail } from "@/lib/views/findings";
 import { cn } from "@/lib/utils/cn";
 
 type Evidence = FindingDetail["evidence"][number];

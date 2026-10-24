@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import type { RiverData } from "@/lib/db/queries/dashboard";
+import type { RiverData } from "@/lib/views/dashboard";
 import { format } from "@/lib/finance/money";
 import { bandAt, buildRiverModel, type RiverBand, type RiverLeak } from "@/lib/river/model";
 import { cn } from "@/lib/utils/cn";

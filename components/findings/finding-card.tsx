@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
-import type { FindingListItem } from "@/lib/db/queries/dashboard";
+import type { FindingListItem } from "@/lib/views/dashboard";
 import { format } from "@/lib/finance/money";
 import { FINDING_TYPE_LABELS, percent, RECOMMENDATION_STATUS_LABELS } from "@/lib/ui/labels";
 import { cn } from "@/lib/utils/cn";

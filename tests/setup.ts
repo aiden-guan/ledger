@@ -4,3 +4,5 @@ import { config } from "dotenv";
 config({ path: ".env.test", quiet: true });
 process.env.EXTERNAL_INTEL_MODE = process.env.EXTERNAL_INTEL_MODE ?? "fixture";
 process.env.INVESTIGATION_STEP_DELAY_MS = "0";
+process.env.LLM_PROVIDER = "none";
+process.env.DEMO_MODE = "true";

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ACTION_TYPES } from "@/lib/db/schema";
+import { ACTION_TYPES } from "@/lib/domain";
 
 export const ActionTypeSchema = z.enum(ACTION_TYPES);
 

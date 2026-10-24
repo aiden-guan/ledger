@@ -20,6 +20,8 @@ const eslintConfig = [
       "next-env.d.ts",
       "apify/**/storage/**",
       "apify/**/node_modules/**",
+      "convex/_generated/**",
+      "scripts/**/*.cjs",
     ],
   },
 ];

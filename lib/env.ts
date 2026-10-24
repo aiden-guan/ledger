@@ -1,10 +1,9 @@
-import "server-only";
 import { z } from "zod";
 
 /**
- * Server-only environment. Secrets (DATABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
- * APIFY_TOKEN, LLM_API_KEY) are read here and never referenced from client code.
- * Only NEXT_PUBLIC_* variables may reach the browser.
+ * Backend environment, read inside Convex functions (set with `npx convex env set`). Secrets
+ * (APIFY_TOKEN, LLM_API_KEY) live only in the Convex deployment: the Next.js app never reads
+ * them, and `npm run check:bundle` verifies they never reach the browser.
  */
 const booleanString = z
   .enum(["true", "false", "1", "0"])
@@ -12,8 +11,8 @@ const booleanString = z
   .transform((v) => v === "true" || v === "1");
 
 const EnvSchema = z.object({
-  DATABASE_URL: z.string().min(1, "DATABASE_URL is required (Supabase Postgres connection string)"),
-  NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
+  /** Public URL of the Next.js app; the demo's sandbox competitor pages live there. */
+  APP_URL: z.string().url().default("http://localhost:3000"),
   DEMO_MODE: booleanString.default(true),
   DEFAULT_ORGANIZATION_SLUG: z.string().default("acme-outdoor"),
   EXTERNAL_INTEL_MODE: z.enum(["live", "fixture"]).default("fixture"),

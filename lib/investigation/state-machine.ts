@@ -1,4 +1,4 @@
-import type { InvestigationStatus } from "@/lib/db/schema";
+import type { InvestigationStatus } from "@/lib/domain";
 
 /** Constrained investigation workflow: each state may only advance to the next (or fail). */
 export const STATE_ORDER: InvestigationStatus[] = [

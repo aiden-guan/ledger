@@ -84,17 +84,27 @@ export interface FormatOptions {
   signed?: boolean;
 }
 
+const CURRENCY_SYMBOLS: Record<string, string> = { USD: "$", CAD: "CA$", AUD: "A$", EUR: "€", GBP: "£" };
+
+/** Groups an integer string with commas: "1234567" -> "1,234,567". */
+function groupThousands(digits: string): string {
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+/**
+ * Formats cents as en-US currency without Intl, so output is identical in every runtime
+ * (browser, Node and the Convex function runtime).
+ */
 export function format(cents: Cents, options: FormatOptions = {}): string {
   assertCents(cents);
   const { currency = "USD", compact = false, signed = false } = options;
-  const whole = cents % 100 === 0;
-  const fractionDigits = compact || whole ? 0 : 2;
-  const formatted = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-    minimumFractionDigits: compact && !whole ? 0 : fractionDigits,
-    maximumFractionDigits: fractionDigits,
-  }).format(Math.abs(cents) / 100);
+  const abs = Math.abs(cents);
+  const whole = abs % 100 === 0;
+  const showFraction = !compact && !whole;
+  const units = showFraction ? Math.floor(abs / 100) : Math.round(abs / 100);
+  const fraction = showFraction ? `.${String(abs % 100).padStart(2, "0")}` : "";
+  const symbol = CURRENCY_SYMBOLS[currency] ?? `${currency} `;
+  const formatted = `${symbol}${groupThousands(String(units))}${fraction}`;
   if (cents < 0) return `-${formatted}`;
   if (signed && cents > 0) return `+${formatted}`;
   return formatted;

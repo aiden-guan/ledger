@@ -2,11 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAction } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 
 /** Restores the seeded demo company. Two-step to avoid accidental resets. */
 export function ResetDemoButton() {
   const router = useRouter();
+  const resetDemo = useAction(api.engine.resetDemo);
   const [state, setState] = useState<"idle" | "confirm" | "working" | "error">("idle");
 
   useEffect(() => {
@@ -18,11 +21,9 @@ export function ResetDemoButton() {
   async function reset() {
     setState("working");
     try {
-      const res = await fetch("/api/demo/reset", { method: "POST" });
-      if (!res.ok) throw new Error();
+      await resetDemo({});
       setState("idle");
       router.push("/");
-      router.refresh();
     } catch {
       setState("error");
     }
