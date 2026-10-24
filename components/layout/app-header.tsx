@@ -1,14 +1,13 @@
 import Link from "next/link";
+import { RosetteMark } from "@/components/brand/rosette-mark";
 import { ResetDemoButton } from "./reset-demo-button";
 import { NavLinks } from "./nav-links";
 
 export function Logo() {
   return (
-    <Link href="/" className="group flex items-center gap-2 font-mono text-[13px] font-medium tracking-[-0.02em]">
-      <span aria-hidden className="grid size-5 place-items-center bg-foreground text-[10px] leading-none text-background transition-colors group-hover:bg-signal">
-        ≋
-      </span>
-      ledgerlens
+    <Link href="/" className="group flex items-center gap-2">
+      <RosetteMark className="size-[22px] transition-transform duration-700 group-hover:rotate-90" />
+      <span className="display hidden text-[19px] font-medium leading-none min-[440px]:inline">LedgerLens</span>
     </Link>
   );
 }

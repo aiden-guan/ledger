@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils/cn";
 
 const LINKS = [
-  { href: "/", label: "overview" },
+  { href: "/overview", label: "overview" },
   { href: "/activity", label: "activity" },
 ];
 
@@ -14,7 +14,7 @@ export function NavLinks() {
   return (
     <nav className="flex items-center gap-1 font-mono text-[12px]">
       {LINKS.map((l) => {
-        const active = l.href === "/" ? pathname === "/" || pathname.startsWith("/findings") : pathname.startsWith(l.href);
+        const active = l.href === "/overview" ? pathname === "/overview" || pathname.startsWith("/findings") : pathname.startsWith(l.href);
         return (
           <Link key={l.href} href={l.href} className={cn("px-1.5 py-1 transition-colors", active ? "text-foreground" : "text-muted-foreground hover:text-foreground")}>
             <span className={cn(!active && "invisible")}>[</span>

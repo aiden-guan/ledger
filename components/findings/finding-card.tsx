@@ -36,7 +36,7 @@ export function FindingCard({ finding, index }: { finding: FindingListItem; inde
           <span className="label">{FINDING_TYPE_LABELS[finding.findingType]}</span>
           <FindingStatusBadge status={finding.status} recommendationStatus={finding.recommendationStatus} />
         </div>
-        <p className="mt-1.5 text-[17px] font-medium leading-snug tracking-[-0.01em]">{finding.title}</p>
+        <p className="display mt-1.5 text-[22px] leading-snug">{finding.title}</p>
         <p className="mt-1 line-clamp-2 max-w-2xl text-[14px] text-muted-foreground">{finding.summary}</p>
         <p className="mt-3 font-mono text-[12px] text-muted-foreground">
           {sealed ? <span className="text-positive">■ approved, ready to execute</span> : <>→ {PREPARED_FIX[finding.findingType] ?? "action prepared"}</>}
@@ -44,7 +44,7 @@ export function FindingCard({ finding, index }: { finding: FindingListItem; inde
         </p>
       </div>
       <div className="relative col-start-2 mt-3 flex items-baseline gap-3 sm:col-start-3 sm:mt-0 sm:flex-col sm:items-end sm:gap-1">
-        <p className={cn("tabular font-mono text-[22px] tracking-[-0.04em]", sealed ? "text-positive" : dimmed ? "text-muted-foreground" : "text-signal")}>
+        <p className={cn("display figure tabular text-[30px] leading-none", sealed ? "text-positive" : dimmed ? "text-muted-foreground" : "text-signal")}>
           {sealed ? "+" : "−"}
           {format(finding.annualImpactCents)}
         </p>

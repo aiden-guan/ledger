@@ -23,14 +23,16 @@ function describe(entry: AuditEntryDTO): string | null {
 
 /** The audit log, live: new decisions appear as they are recorded. */
 export function ActivityView({ organization, trail }: { organization: Preloaded<typeof api.dashboard.organization>; trail: Preloaded<typeof api.findings.auditTrail> }) {
-  const org = usePreloadedQuery(organization);
-  const entries = usePreloadedQuery(trail);
+  return <ActivityContent org={usePreloadedQuery(organization)} entries={usePreloadedQuery(trail)} />;
+}
+
+export function ActivityContent({ org, entries }: { org: { name: string; demoMode: boolean } | null; entries: AuditEntryDTO[] }) {
   return (
     <>
       <AppHeader organizationName={org?.name} demoMode={org?.demoMode ?? false} />
       <main className="mx-auto max-w-4xl px-4 pb-20 pt-12 sm:px-6">
         <p className="label">audit.log</p>
-        <h1 className="mt-3 text-[34px] font-medium tracking-[-0.035em] sm:text-[44px]">Every decision, on the record.</h1>
+        <h1 className="display mt-3 text-[38px] font-medium sm:text-[52px]">Every decision, on the record.</h1>
         <p className="mt-3 max-w-xl text-[15px] text-muted-foreground">Every investigation and every decision on a recommendation, newest first. Nothing here can be edited.</p>
         <ol className="mt-10 border-t border-border-strong font-mono text-[12px]">
           {entries.length === 0 && <li className="py-6 text-muted-foreground">no activity yet.</li>}

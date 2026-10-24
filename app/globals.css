@@ -1,53 +1,56 @@
 @import "tailwindcss";
 
 /*
- * LedgerLens: an instrument, not a landing page. Paper and ink, hairline rules, monospace
- * for anything measured, and one signal color reserved for money that is leaking.
+ * LedgerLens prints like a banknote: cotton paper, one intaglio ink, fine engraved line-work
+ * (guilloché) and red reserved for money that is leaking, as in any ledger. Display figures
+ * are set in a Didone, the face of denominations; measurements stay in mono.
  */
 :root {
-  --background: oklch(0.985 0.002 270);
-  --foreground: oklch(0.17 0.004 270);
-  --card: oklch(1 0 0);
+  --background: oklch(0.963 0.011 108);
+  --foreground: oklch(0.21 0.026 170);
+  --card: oklch(0.982 0.007 108);
   --card-foreground: var(--foreground);
-  --muted: oklch(0.955 0.003 270);
-  --muted-foreground: oklch(0.5 0.008 270);
-  --faint: oklch(0.72 0.006 270);
-  --border: oklch(0.17 0.004 270 / 0.1);
-  --border-strong: oklch(0.17 0.004 270 / 0.22);
+  --muted: oklch(0.935 0.013 110);
+  --muted-foreground: oklch(0.46 0.026 165);
+  --faint: oklch(0.7 0.02 160);
+  --border: oklch(0.21 0.026 170 / 0.12);
+  --border-strong: oklch(0.21 0.026 170 / 0.28);
   --input: var(--border-strong);
   --ring: var(--foreground);
   --primary: var(--foreground);
   --primary-foreground: var(--background);
   --secondary: var(--muted);
   --secondary-foreground: var(--foreground);
-  --signal: oklch(0.64 0.215 36);
-  --signal-soft: oklch(0.64 0.215 36 / 0.09);
-  --positive: oklch(0.52 0.12 152);
-  --positive-soft: oklch(0.52 0.12 152 / 0.09);
+  --engrave: oklch(0.43 0.07 168);
+  --signal: oklch(0.55 0.2 27);
+  --signal-soft: oklch(0.55 0.2 27 / 0.09);
+  --positive: oklch(0.5 0.11 158);
+  --positive-soft: oklch(0.5 0.11 158 / 0.1);
   --negative: var(--signal);
   --negative-soft: var(--signal-soft);
-  --warning: oklch(0.68 0.14 75);
-  --warning-soft: oklch(0.68 0.14 75 / 0.1);
+  --warning: oklch(0.66 0.13 75);
+  --warning-soft: oklch(0.66 0.13 75 / 0.12);
   --accent: var(--signal);
   --radius: 2px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: oklch(0.145 0.003 270);
-    --foreground: oklch(0.93 0.003 270);
-    --card: oklch(0.17 0.003 270);
-    --muted: oklch(0.2 0.003 270);
-    --muted-foreground: oklch(0.66 0.006 270);
-    --faint: oklch(0.45 0.006 270);
-    --border: oklch(0.93 0.003 270 / 0.1);
-    --border-strong: oklch(0.93 0.003 270 / 0.24);
-    --signal: oklch(0.7 0.19 40);
-    --signal-soft: oklch(0.7 0.19 40 / 0.12);
-    --positive: oklch(0.72 0.14 152);
-    --positive-soft: oklch(0.72 0.14 152 / 0.12);
-    --warning: oklch(0.78 0.13 80);
-    --warning-soft: oklch(0.78 0.13 80 / 0.12);
+    --background: oklch(0.175 0.02 170);
+    --foreground: oklch(0.93 0.016 108);
+    --card: oklch(0.2 0.022 170);
+    --muted: oklch(0.235 0.022 170);
+    --muted-foreground: oklch(0.7 0.03 150);
+    --faint: oklch(0.47 0.03 160);
+    --border: oklch(0.93 0.016 108 / 0.11);
+    --border-strong: oklch(0.93 0.016 108 / 0.26);
+    --engrave: oklch(0.74 0.07 160);
+    --signal: oklch(0.68 0.18 30);
+    --signal-soft: oklch(0.68 0.18 30 / 0.13);
+    --positive: oklch(0.76 0.12 158);
+    --positive-soft: oklch(0.76 0.12 158 / 0.13);
+    --warning: oklch(0.8 0.12 80);
+    --warning-soft: oklch(0.8 0.12 80 / 0.12);
   }
 }
 
@@ -76,12 +79,14 @@
   --color-warning: var(--warning);
   --color-warning-soft: var(--warning-soft);
   --color-accent: var(--accent);
+  --color-engrave: var(--engrave);
   --radius-sm: 1px;
   --radius-md: 2px;
   --radius-lg: 2px;
   --radius-xl: 3px;
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-display: var(--font-bodoni), "Bodoni 72", Didot, Georgia, serif;
 }
 
 @layer base {
@@ -119,6 +124,9 @@
   position: relative;
   border: 1px solid var(--border-strong);
   background: var(--card);
+  box-shadow:
+    0 0 0 3px var(--background),
+    0 0 0 4px var(--border);
 }
 .frame-title {
   position: absolute;
@@ -197,4 +205,81 @@
   .cursor-blink {
     animation: none;
   }
+}
+
+/* Display numerals and headings: a Didone with tight tracking, like a denomination. */
+.display {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-variant-numeric: lining-nums;
+  letter-spacing: -0.02em;
+}
+
+/* Microprint: the tiny repeating text that banknotes use as a security line. */
+.microprint {
+  font-family: var(--font-mono);
+  font-size: 7px;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  color: var(--muted-foreground);
+}
+
+/* Engraved hatching used to fill large type: fine horizontal rules instead of a solid fill. */
+.hatched {
+  background-image: repeating-linear-gradient(to bottom, var(--hatch, var(--engrave)) 0 1px, transparent 1px 4px);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Line-by-line reveal for headings: each line rises out of a clipped slot. */
+@keyframes ll-rise {
+  from {
+    transform: translateY(105%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+.rise-slot {
+  display: block;
+  overflow: hidden;
+  padding-bottom: 0.08em;
+  margin-bottom: -0.08em;
+}
+.rise-slot > span {
+  display: block;
+  animation: ll-rise 900ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes ll-fade {
+  from {
+    opacity: 0;
+  }
+}
+.animate-fade {
+  animation: ll-fade 700ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise-slot > span,
+  .animate-fade {
+    animation: none;
+  }
+}
+
+@keyframes ll-drift {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* Figures use a lower optical size: at display sizes the high-contrast cut loses the hairline
+   of the 4 and shrinks the comma to a dot, which makes amounts ambiguous. */
+.figure {
+  font-optical-sizing: none;
+  font-variation-settings: "opsz" 24;
 }

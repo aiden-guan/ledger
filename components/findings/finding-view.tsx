@@ -16,11 +16,15 @@ import { buildFixDraft } from "@/lib/investigation/drafts";
 import { format } from "@/lib/finance/money";
 import { ACTION_TYPE_LABELS, AUDIT_ACTION_LABELS, confidenceLabel, FINDING_TYPE_LABELS, formatDateTime } from "@/lib/ui/labels";
 import { cn } from "@/lib/utils/cn";
+import type { FindingDetail } from "@/lib/views/findings";
 
 /** A finding, kept live: approving or rejecting re-renders it from the committed record. */
 export function FindingView({ preloaded }: { preloaded: Preloaded<typeof api.findings.detail> }) {
   const detail = usePreloadedQuery(preloaded);
-  if (!detail) return null;
+  return detail ? <FindingContent detail={detail} /> : null;
+}
+
+export function FindingContent({ detail }: { detail: FindingDetail }) {
   const { finding, evidence, recommendation, audit, events } = detail;
   const market = evidence.filter((e) => e.display?.kind === "competitor");
   const internal = evidence.filter((e) => e.display && e.display.kind !== "competitor");
@@ -38,7 +42,7 @@ export function FindingView({ preloaded }: { preloaded: Preloaded<typeof api.fin
       <AppHeader organizationName={detail.organization.name} demoMode={detail.organization.demoMode} />
       <main className="mx-auto max-w-6xl px-4 pb-20 pt-8 sm:px-6">
         <nav className="flex items-center gap-2 font-mono text-[12px] text-muted-foreground">
-          <Link href="/" className="hover:text-foreground">
+          <Link href="/overview" className="hover:text-foreground">
             ← overview
           </Link>
           <span className="text-faint">/</span>
@@ -55,7 +59,7 @@ export function FindingView({ preloaded }: { preloaded: Preloaded<typeof api.fin
               <Badge variant={level === "High" ? "positive" : level === "Medium" ? "warning" : "negative"}>{level.toLowerCase()} confidence</Badge>
               {finding.status === "NEEDS_REVIEW" && <Badge variant="warning">evidence did not fully support this finding</Badge>}
             </div>
-            <h1 className="mt-4 text-balance text-[34px] font-medium leading-[1.05] tracking-[-0.035em] sm:text-[48px]">{finding.title}</h1>
+            <h1 className="display mt-4 text-balance text-[38px] font-medium leading-[1.02] sm:text-[54px]">{finding.title}</h1>
             <p className="mt-5 max-w-2xl text-[16px] leading-relaxed text-muted-foreground">{finding.summary}</p>
             {sealed && <SealedBanner annualCents={finding.annualImpactCents} oneTime={oneTime} />}
 
@@ -159,7 +163,7 @@ export function FindingView({ preloaded }: { preloaded: Preloaded<typeof api.fin
           <aside className="space-y-8 lg:sticky lg:top-8 lg:self-start">
             <Frame title="impact" className="px-5 pb-5 pt-6">
               <p className="label">{sealed ? "recovered when executed" : oneTime ? "paid by mistake" : "leaking every year"}</p>
-              <p className={cn("tabular mt-2 text-[44px] font-medium leading-none tracking-[-0.04em]", sealed ? "text-positive" : "text-signal")}>
+              <p className={cn("display figure tabular mt-2 text-[52px] font-medium leading-none", sealed ? "text-positive" : "text-signal")}>
                 {sealed ? "+" : "−"}
                 {format(finding.annualImpactCents, { compact: true })}
                 <span className="ml-1 text-[14px] tracking-normal text-muted-foreground">{oneTime ? "once" : "/yr"}</span>

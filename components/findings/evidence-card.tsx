@@ -31,7 +31,7 @@ export function EvidenceCard({ evidence }: { evidence: Evidence }) {
   }
   if (d.kind === "transactions") {
     return (
-      <div className="border border-border-strong bg-card sm:col-span-2 lg:col-span-3">
+      <div className="min-w-0 border border-border-strong bg-card sm:col-span-2 lg:col-span-3">
         <p className="label px-4 pt-4">{evidence.title}</p>
         <div className="overflow-x-auto">
           <table className="mt-2 w-full font-mono text-[12px]">

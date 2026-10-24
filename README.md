@@ -111,7 +111,7 @@ npx convex env set APIFY_TOKEN             # optional: live competitor pricing
 npx convex env set APIFY_ACTOR_ID          # e.g. your-username/ledgerlens-competitor-pricing
 npx convex env set EXTERNAL_INTEL_MODE live
 npm run demo:seed
-npm run dev                    # http://localhost:3000
+npm run dev                    # http://localhost:3000 (dashboard at /overview)
 ```
 
 You can also enter them in the Convex dashboard under Settings → Environment Variables.
@@ -211,7 +211,7 @@ That pushes the Convex functions and builds Next.js against the production deplo
 
 With `DEMO_MODE=true` (on the Convex deployment) the header shows **Reset demo** and the demo seed and reset functions run. With it off, they refuse with FORBIDDEN and the button is hidden. The suggested demo:
 
-1. Open the dashboard: the money river shows where Acme Outdoor Co.'s revenue goes and how thin its profit is.
+1. Open the landing page and move the loupe over a red break in the rosette, then click **Open the case files**. The dashboard's money river shows where Acme Outdoor Co.'s revenue goes and how thin its profit is.
 2. Click **Investigate again** (or **Run investigation** on a fresh seed). Suspected leaks appear on the river as the agent works, then turn into measured amounts.
 3. Click **Preview with fixes** to see profit with every prepared fix approved.
 4. Open the highest-value leak: review the prepared fix, the calculations and the source evidence.
@@ -238,6 +238,10 @@ With `DEMO_MODE=true` (on the Convex deployment) the header shows **Reset demo**
 
 ## Screenshots
 
+The landing page. The rosette is engraved live from the demo company's books; each red break is a leak, and the loupe magnifies the microprint, which is the real ledger:
+
+![Landing page](docs/screenshots/landing.png)
+
 The money river after an investigation, with each leak marked where it drains:
 
 ![Dashboard](docs/screenshots/dashboard.png)
@@ -246,16 +250,14 @@ The same river with every prepared fix approved:
 
 ![River preview](docs/screenshots/river-preview.png)
 
-The agent investigating, with suspected leaks marked on the river as it works:
-
-![Investigation running](docs/screenshots/investigation-running.png)
-
 A leak with its fix already prepared, plus the evidence behind it:
 
 ![Finding detail](docs/screenshots/finding-detail.png)
 
-On a phone, the river's stream labels move under it:
+On a phone:
 
 ![Mobile](docs/screenshots/mobile.png)
 
-The interface is styled as an instrument rather than a landing page: paper and ink with hairline rules, Geist Mono for anything measured, one signal orange reserved for money that is leaking, and the money river drawn as animated ASCII on a canvas. It follows the system light or dark setting and respects reduced motion.
+The look borrows from banknote security printing: cotton paper, one intaglio-green ink, fine guilloché line-work, microprint set from ledger text, and red reserved for money that is leaking, as in any ledger. Headlines and amounts are set in Bodoni Moda; measurements stay in Geist Mono. The money river is drawn as engraved line ribbons on a canvas. Every figure on the landing page comes from running the engine over the demo books at build time (`lib/landing/data.ts`). The site follows the system light or dark setting and respects reduced motion.
+
+In development, `/preview/overview`, `/preview/findings/0` and `/preview/activity` render the app views from an in-memory engine run, without a Convex deployment (`?approved=1` on a finding shows the approved state). These routes return 404 in production.

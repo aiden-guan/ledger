@@ -25,6 +25,8 @@ interface Particle {
 
 interface Palette {
   ink: string;
+  engrave: string;
+  background: string;
   muted: string;
   faint: string;
   signal: string;
@@ -35,23 +37,7 @@ interface Palette {
 function readPalette(): Palette {
   const s = getComputedStyle(document.documentElement);
   const v = (name: string) => s.getPropertyValue(name).trim() || "#888";
-  return { ink: v("--foreground"), muted: v("--muted-foreground"), faint: v("--faint"), signal: v("--signal"), positive: v("--positive"), warning: v("--warning") };
-}
-
-/** Flowing value noise in [0, 1]: drifts left to right over time. */
-function flow(c: number, r: number, t: number, seed: number) {
-  const a = Math.sin(c * 0.43 - t * 3.1 + r * 1.71 + seed * 2.3);
-  const b = Math.cos(c * 0.127 - t * 1.3 - r * 0.53 + seed);
-  const d = Math.sin(c * 0.071 + r * 2.9 - t * 0.7);
-  return 0.5 + 0.5 * (a * 0.55 + b * 0.3 + d * 0.15);
-}
-
-function glyph(v: number) {
-  if (v < 0.2) return " ";
-  if (v < 0.46) return "·";
-  if (v < 0.68) return ":";
-  if (v < 0.86) return "•";
-  return "●";
+  return { ink: v("--foreground"), engrave: v("--engrave"), background: v("--background"), muted: v("--muted-foreground"), faint: v("--faint"), signal: v("--signal"), positive: v("--positive"), warning: v("--warning") };
 }
 
 function leakU(index: number) {
@@ -59,9 +45,9 @@ function leakU(index: number) {
 }
 
 /**
- * The money river, drawn in characters. Each stream of spending is a band of glyphs drifting
- * from revenue (left) to where the money ends up (right). Leaks drip out of their band in the
- * signal color; a sealed leak stops dripping and the profit band widens.
+ * The money river, engraved. Each stream of spending is a ribbon of fine lines running from
+ * revenue (left) to where the money ends up (right). Leaks drip out of their band in red; a
+ * sealed leak stops dripping and the profit band widens.
  */
 export function AsciiRiver({ river, leaks, scanning = false, preview = false }: { river: RiverData; leaks: RiverLeak[]; scanning?: boolean; preview?: boolean }) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -173,49 +159,71 @@ export function AsciiRiver({ river, leaks, scanning = false, preview = false }: 
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
 
-      // Bands
+      // Bands, engraved: each stream is a ribbon of fine lines that converge and spread with
+      // the flow, rippling slowly left to right like the water in a banknote vignette.
       const span = Math.max(1, x1 - x0);
-      const scanCol = scan && !reduce ? x0 + ((t * 0.45) % 1.12) * span : -99;
+      const xs = (c: number) => c * size.cellW + size.cellW / 2;
+      const step = 0.5;
       m.bands.forEach((target, bi) => {
         const b = current.get(target.key)!;
         const isProfit = b.key === "profit";
-        for (let c = x0; c <= x1; c++) {
-          const u = (c - x0) / span;
-          const { top, bottom } = bandAt(b, u);
-          let r0 = Math.round(top);
-          let r1 = Math.round(bottom) - 1;
-          if (r1 < r0) r1 = r0 = Math.floor((top + bottom) / 2);
-          for (let r = r0; r <= r1; r++) {
-            const d = scanCol - c;
-            if (d >= 0 && d < 4) {
-              put(c, r, ["█", "▓", "▒", "░"][Math.floor(d)], palette.signal, 1 - d * 0.18);
-              continue;
-            }
-            const edge = r === r0 || r === r1;
-            const v = flow(c, r, t, bi);
-            if (isProfit) put(c, r, v < 0.35 ? "•" : "●", palette.positive, 0.95);
-            else put(c, r, edge ? (v < 0.5 ? "·" : ":") : glyph(v), edge ? palette.ink : palette.muted, edge ? 0.75 : 0.62);
+        const thick = Math.max(b.sy1 - b.sy0, b.ty1 - b.ty0) * CELL_H;
+        const n = Math.max(2, Math.round(thick / (isProfit ? 2.2 : 3)));
+        for (let k = 0; k < n; k++) {
+          const edge = k === 0 || k === n - 1;
+          ctx.beginPath();
+          for (let c = x0; c <= x1; c += step) {
+            const u = (c - x0) / span;
+            const { top, bottom } = bandAt(b, u);
+            const ripple = edge ? 0 : Math.sin(u * 18 - t * 1.4 + k * 0.9 + bi * 1.7) * Math.min(1.2, (bottom - top) * 0.25);
+            const y = (top + ((k + 0.5) / n) * (bottom - top)) * CELL_H + ripple;
+            if (c === x0) ctx.moveTo(xs(c), y);
+            else ctx.lineTo(xs(c), y);
           }
+          ctx.strokeStyle = isProfit ? palette.positive : edge ? palette.ink : palette.engrave;
+          ctx.globalAlpha = isProfit ? 0.9 : edge ? 0.8 : 0.55;
+          ctx.lineWidth = edge ? 0.9 : 0.6;
+          ctx.stroke();
         }
       });
+
+      // The agent's scan line sweeping through the books while an investigation runs.
+      if (scan && !reduce) {
+        const sc = x0 + ((t * 0.45) % 1.12) * span;
+        for (let i = 0; i < 4; i++) {
+          ctx.globalAlpha = 0.9 - i * 0.22;
+          ctx.strokeStyle = palette.signal;
+          ctx.lineWidth = i === 0 ? 1.2 : 0.6;
+          ctx.beginPath();
+          ctx.moveTo(xs(sc - i * 0.6), (src.top - 1) * CELL_H);
+          ctx.lineTo(xs(sc - i * 0.6), (rows - 1) * CELL_H);
+          ctx.stroke();
+        }
+      }
 
       // Uncaptured revenue: a dashed tributary that should be feeding the source but is not.
       if (ghost > 0.2) {
         const gTop = src.top - ghost;
-        for (let c = 0; c < x0; c++) {
-          const lift = (1 - c / x0) * 3;
-          for (let r = Math.round(gTop - lift); r < Math.round(src.top - lift); r++) {
-            if ((c + r + Math.floor(t * 4)) % 2 === 0) put(c, r, "·", palette.signal, 0.85);
-          }
+        ctx.strokeStyle = palette.signal;
+        ctx.globalAlpha = 0.8;
+        ctx.lineWidth = 0.7;
+        ctx.setLineDash([2, 3]);
+        ctx.lineDashOffset = -t * 8;
+        const lines = Math.max(2, Math.round((ghost * CELL_H) / 3));
+        for (let k = 0; k < lines; k++) {
+          const y = (gTop + ((k + 0.5) / lines) * ghost) * CELL_H;
+          ctx.beginPath();
+          ctx.moveTo(0, y - 3 * CELL_H);
+          ctx.quadraticCurveTo(xs(x0 - 3), y - 2.5 * CELL_H, xs(x0 - 2), y);
+          ctx.stroke();
         }
+        ctx.setLineDash([]);
       }
 
-      // Source column
-      for (let r = Math.round(src.top - ghost); r < Math.round(src.bottom); r++) {
-        const inGhost = r < Math.round(src.top);
-        put(x0 - 2, r, inGhost ? "░" : "█", inGhost ? palette.signal : palette.ink, inGhost ? 0.8 : 0.95);
-        put(x0 - 1, r, inGhost ? "░" : "▌", inGhost ? palette.signal : palette.ink, inGhost ? 0.8 : 0.95);
-      }
+      // Source column: where revenue enters.
+      ctx.globalAlpha = 0.95;
+      ctx.fillStyle = palette.ink;
+      ctx.fillRect(xs(x0 - 2) - size.cellW / 2, src.top * CELL_H, size.cellW * 1.4, (src.bottom - src.top) * CELL_H);
 
       // Leak markers and drips
       const perStream = new Map<string, number>();
@@ -237,19 +245,33 @@ export function AsciiRiver({ river, leaks, scanning = false, preview = false }: 
           const { top, bottom } = bandAt(b, u);
           r = Math.floor((top + bottom) / 2);
         }
+        const cx = xs(c);
+        const cy = r * CELL_H + CELL_H / 2;
         if (state === "suspect") {
           if (reduce || Math.floor(t * 2.5) % 2 === 0) put(c, r, "?", palette.warning, 1);
         } else if (state === "sealed") {
-          put(c, r, "■", palette.positive, 1);
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = palette.positive;
+          ctx.fillRect(cx - 3.5, cy - 3.5, 7, 7);
         } else {
-          put(c - 1, r, "[", palette.signal, 0.9);
-          put(c, r, "◆", palette.signal, 1);
-          put(c + 1, r, "]", palette.signal, 0.9);
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = palette.background;
+          ctx.fillRect(cx - 7, cy - 6, 14, 12);
+          ctx.fillStyle = palette.signal;
+          ctx.beginPath();
+          ctx.moveTo(cx, cy - 4.5);
+          ctx.lineTo(cx + 4.5, cy);
+          ctx.lineTo(cx, cy + 4.5);
+          ctx.lineTo(cx - 4.5, cy);
+          ctx.closePath();
+          ctx.fill();
           if (!reduce && Math.random() < dt * 9) {
-            particles.push({ x: c + (Math.random() - 0.5) * 1.5, y: r + 0.6, vx: (Math.random() - 0.5) * 2.2, vy: 1 + Math.random() * 2, life: 1, ch: Math.random() < 0.5 ? "·" : "'" });
+            particles.push({ x: c + (Math.random() - 0.5) * 1.5, y: r + 0.6, vx: (Math.random() - 0.5) * 2.2, vy: 1 + Math.random() * 2, life: 1, ch: "" });
           }
         }
       }
+      ctx.strokeStyle = palette.signal;
+      ctx.lineWidth = 0.8;
       for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
         p.vy += 9 * dt;
@@ -260,7 +282,11 @@ export function AsciiRiver({ river, leaks, scanning = false, preview = false }: 
           particles.splice(i, 1);
           continue;
         }
-        put(Math.round(p.x), Math.round(p.y), p.y - Math.floor(p.y) > 0.5 ? "," : p.ch, palette.signal, Math.max(0, p.life));
+        ctx.globalAlpha = Math.max(0, p.life);
+        ctx.beginPath();
+        ctx.moveTo(xs(p.x), p.y * CELL_H);
+        ctx.lineTo(xs(p.x), p.y * CELL_H + 3 + p.vy);
+        ctx.stroke();
       }
       ctx.globalAlpha = 1;
     };

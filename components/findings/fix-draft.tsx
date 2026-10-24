@@ -37,7 +37,7 @@ export function FixDraftPanel({ draft, sealed }: { draft: FixDraft; sealed: bool
             <span className="ml-3 text-muted-foreground">({change >= 0 ? "+" : ""}{change.toFixed(1)}%)</span>
           </p>
         </div>
-        <p className="mt-5 flex items-baseline gap-4 font-mono text-4xl tracking-tight sm:text-5xl">
+        <p className="display figure mt-5 flex items-baseline gap-4 text-[44px] leading-none sm:text-[60px]">
           <span className="tabular text-faint line-through decoration-1">{format(draft.fromCents, { compact: false })}</span>
           <span className="text-muted-foreground">→</span>
           <span className="tabular">{format(draft.toCents, { compact: false })}</span>

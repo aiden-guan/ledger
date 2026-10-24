@@ -23,7 +23,7 @@ export function ResetDemoButton() {
     try {
       await resetDemo({});
       setState("idle");
-      router.push("/");
+      router.push("/overview");
     } catch {
       setState("error");
     }

@@ -10,14 +10,17 @@ import { InvestigationStage } from "@/components/investigation/investigation-sta
 import { SeedDemoPanel } from "@/components/dashboard/empty-states";
 import { RelativeTime } from "@/components/financial/relative-time";
 import { format } from "@/lib/finance/money";
+import type { DashboardData } from "@/lib/views/dashboard";
 
 /**
  * The overview, rendered on the server and then kept live by a Convex subscription: a run
  * finishing, a fix approved in another tab or a demo reset all re-render it without a reload.
  */
 export function DashboardView({ preloaded }: { preloaded: Preloaded<typeof api.dashboard.get> }) {
-  const data = usePreloadedQuery(preloaded);
+  return <DashboardContent data={usePreloadedQuery(preloaded)} />;
+}
 
+export function DashboardContent({ data }: { data: DashboardData | null }) {
   if (!data) {
     return (
       <>

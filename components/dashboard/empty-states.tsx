@@ -6,7 +6,7 @@ export function SystemErrorPanel({ reason = "unreachable" }: { reason?: "unreach
       <p className="font-mono text-[12px] uppercase tracking-[0.08em] text-signal">
         {reason === "not_configured" ? "[fail] backend not configured" : "[fail] backend unreachable"}
       </p>
-      <h1 className="mt-3 text-[30px] font-medium tracking-[-0.03em]">LedgerLens can&apos;t reach its backend.</h1>
+      <h1 className="display mt-3 text-[34px] font-medium">LedgerLens can&apos;t reach its backend.</h1>
       <p className="mt-3 text-[15px] text-muted-foreground">
         {reason === "not_configured" ? (
           <>
@@ -24,7 +24,7 @@ export function SystemErrorPanel({ reason = "unreachable" }: { reason?: "unreach
 export function SeedDemoPanel({ demoMode }: { demoMode: boolean }) {
   return (
     <main className="mx-auto max-w-xl px-4 py-24 text-center sm:px-6">
-      <h1 className="text-[30px] font-medium tracking-[-0.03em]">No business data yet.</h1>
+      <h1 className="display text-[34px] font-medium">No business data yet.</h1>
       <p className="mt-3 text-[15px] text-muted-foreground">
         {demoMode
           ? "Load the Acme Outdoor Co. demo company: six months of sales, supplier costs and bank transactions."

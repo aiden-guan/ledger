@@ -162,21 +162,21 @@ export function InvestigationStage({
           </p>
 
           {state === "leaking" ? (
-            <h1 key="leaking" className="animate-fade-up mt-5 text-[38px] font-medium leading-[1.02] tracking-[-0.035em] sm:text-[60px]">
-              Leaking <Scramble text={format(leakingAnnual)} className="tabular text-signal" /> a year
+            <h1 key="leaking" className="display animate-fade-up mt-5 text-[40px] font-medium leading-[1.02] tracking-[-0.03em] sm:text-[62px]">
+              Leaking <Scramble text={format(leakingAnnual)} className="figure tabular text-signal" /> a year
               {paidTwice > 0 && (
                 <>
-                  , and <Scramble text={format(paidTwice)} className="tabular text-signal" /> paid twice
+                  , and <Scramble text={format(paidTwice)} className="figure tabular text-signal" /> paid twice
                 </>
               )}
               .
             </h1>
           ) : state === "sealed" ? (
-            <h1 key="sealed" className="animate-fade-up mt-5 text-[38px] font-medium leading-[1.02] tracking-[-0.035em] sm:text-[60px]">
-              Every leak sealed. <Scramble text={`+${format(sealedGain)}`} className="tabular text-positive" /> a year.
+            <h1 key="sealed" className="display animate-fade-up mt-5 text-[40px] font-medium leading-[1.02] tracking-[-0.03em] sm:text-[62px]">
+              Every leak sealed. <Scramble text={`+${format(sealedGain)}`} className="figure tabular text-positive" /> a year.
             </h1>
           ) : (
-            <h1 key="intro" className="animate-fade-up mt-5 text-[38px] font-medium leading-[1.02] tracking-[-0.035em] sm:text-[60px]">
+            <h1 key="intro" className="display animate-fade-up mt-5 text-[40px] font-medium leading-[1.02] tracking-[-0.03em] sm:text-[62px]">
               {run.running ? (
                 <>
                   Following every dollar<span className="cursor-blink text-signal">_</span>
