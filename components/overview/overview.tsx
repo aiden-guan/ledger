@@ -5,10 +5,12 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { Preloaded } from "convex/react";
 import type { api } from "@/convex/_generated/api";
 import { Mark } from "@/components/brand/mark";
+import { ThemeToggle } from "@/components/brand/theme-toggle";
 import { merchantKey } from "@/lib/finance/merchants";
 import { format } from "@/lib/finance/money";
 import { isCredible, isFixed, isOpen, type FieldData, type FieldLeak } from "@/lib/field/model";
 import { INVESTIGATION_STEPS } from "@/lib/investigation/state-machine";
+import { isDark, onThemeChange } from "@/lib/theme";
 import { cn } from "@/lib/utils/cn";
 import { Count } from "./count";
 import { Details } from "./details";
@@ -104,11 +106,9 @@ function suspectRecords(field: FieldData, s: { type: string; label: string }) {
 function useDark() {
   const [dark, setDark] = useState(false);
   useEffect(() => {
-    const q = window.matchMedia("(prefers-color-scheme: dark)");
-    const on = () => setDark(q.matches);
+    const on = () => setDark(isDark());
     on();
-    q.addEventListener("change", on);
-    return () => q.removeEventListener("change", on);
+    return onThemeChange(on);
   }, []);
   return dark;
 }
@@ -883,6 +883,7 @@ export function Overview({ source }: { source: Source }) {
               <span className={cn("size-1.5", source.mode === "live" ? "bg-signal" : "bg-found")} />
               {source.mode}
             </span>
+            <ThemeToggle />
             <button
               onClick={() => setDetails((v) => !v)}
               className={cn("px-2 py-1 transition-colors hover:text-foreground", details ? "text-foreground" : "text-muted-foreground")}

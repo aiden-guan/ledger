@@ -1,5 +1,16 @@
 @import "tailwindcss";
 
+@custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme="light"]) *) {
+      @slot;
+    }
+  }
+}
+
 /*
  * LedgerLens is a field notebook: warm paper, black ink, hairline rules, and two pigments. Blue is
  * the books; orange is money the engine found. Type is Geist; anything measured is set in mono.
@@ -35,8 +46,9 @@
   color-scheme: light;
 }
 
+/* Night: when the system is dark and the visitor has not picked paper, or when they picked night. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --background: #0d0d0e;
     --foreground: #ededea;
     --card: #141416;
@@ -54,6 +66,24 @@
     --warning-soft: rgb(224 166 72 / 0.12);
     color-scheme: dark;
   }
+}
+:root[data-theme="dark"] {
+  --background: #0d0d0e;
+  --foreground: #ededea;
+  --card: #141416;
+  --muted: #1b1b1d;
+  --muted-foreground: #8e8e88;
+  --faint: #55554f;
+  --border: rgb(237 237 234 / 0.08);
+  --border-strong: rgb(237 237 234 / 0.2);
+  --signal: #5b93ff;
+  --signal-soft: rgb(91 147 255 / 0.12);
+  --found: #ff9a4a;
+  --negative: #ff6a52;
+  --negative-soft: rgb(255 106 82 / 0.12);
+  --warning: #e0a648;
+  --warning-soft: rgb(224 166 72 / 0.12);
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -289,9 +319,12 @@
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.4 0 0 0 0 0.36 0 0 0 0 0.3 0 0 0 0.09 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 @media (prefers-color-scheme: dark) {
-  .paper::before {
+  :root:not([data-theme="light"]) .paper::before {
     opacity: 0.25;
   }
+}
+[data-theme="dark"] .paper::before {
+  opacity: 0.25;
 }
 
 /* A hairline that drips downward: scroll this way. */

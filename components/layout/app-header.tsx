@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Mark } from "@/components/brand/mark";
+import { ThemeToggle } from "@/components/brand/theme-toggle";
 import { ResetDemoButton } from "./reset-demo-button";
 import { NavLinks } from "./nav-links";
 
@@ -19,7 +20,10 @@ export function AppHeader({ organizationName, demoMode }: { organizationName?: s
         <Logo />
         {organizationName && <span className="hidden font-mono text-[12px] text-muted-foreground md:inline">/ {organizationName.toLowerCase()}</span>}
         <NavLinks />
-        <div className="ml-auto flex items-center gap-2">{demoMode && <ResetDemoButton />}</div>
+        <div className="ml-auto flex items-center gap-2">
+          <ThemeToggle />
+          {demoMode && <ResetDemoButton />}
+        </div>
       </div>
     </header>
   );

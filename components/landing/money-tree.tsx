@@ -10,6 +10,7 @@ import { type Garden, flowerInk, layGarden, padInk } from "@/lib/landing/garden"
 import { DROP_HEART, FINS, GLINT, type KoiDot, type Loop, POND, SPINE, TAIL, TIP, WATER, bayer, condense, dropInk, follow, hash2, headAngle, koiDots, koiHalf, loopAt, ripples, splash, swim } from "@/lib/landing/pond";
 import { type River, SHADOW, type Way, banks, centre, currents, layRiver, pace, riverWay, rockEdge, rockInk, sample, track, wayOut } from "@/lib/landing/river";
 import { type Anchor, CLOCK, type Dot, type Ink, INK, INK_PRIORITY, PART, growTree, sprout, visibleCount } from "@/lib/landing/tree";
+import { isDark, onThemeChange } from "@/lib/theme";
 import { cn } from "@/lib/utils/cn";
 import { scroller } from "./smooth-scroll";
 
@@ -187,11 +188,10 @@ export function MoneyTree({ data }: { data: LandingData }) {
     if (!pctx) return;
     let hairlines: CanvasPattern | null = null;
 
-    const dark = window.matchMedia("(prefers-color-scheme: dark)");
     const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    let pal = dark.matches ? PALETTES.dark : PALETTES.light;
+    let pal = isDark() ? PALETTES.dark : PALETTES.light;
     const onScheme = () => {
-      pal = dark.matches ? PALETTES.dark : PALETTES.light;
+      pal = isDark() ? PALETTES.dark : PALETTES.light;
       request();
     };
 
@@ -1275,7 +1275,7 @@ export function MoneyTree({ data }: { data: LandingData }) {
     window.addEventListener("keydown", onKey);
     st.addEventListener("pointermove", onMove);
     st.addEventListener("pointerleave", onLeave);
-    dark.addEventListener("change", onScheme);
+    const offScheme = onThemeChange(onScheme);
     return () => {
       cancelAnimationFrame(frame);
       cancelAnimationFrame(introFrame);
@@ -1285,7 +1285,7 @@ export function MoneyTree({ data }: { data: LandingData }) {
       window.removeEventListener("keydown", onKey);
       st.removeEventListener("pointermove", onMove);
       st.removeEventListener("pointerleave", onLeave);
-      dark.removeEventListener("change", onScheme);
+      offScheme();
     };
   }, [tree, nodes, fish]);
 

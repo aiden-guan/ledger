@@ -3,6 +3,7 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { ConvexClientProvider } from "@/components/providers/convex-client-provider";
 import { CONVEX_URL } from "@/lib/convex/config";
+import { THEME_SCRIPT } from "@/lib/theme";
 import "./globals.css";
 
 export const viewport = {
@@ -19,7 +20,10 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
+    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       <body className="min-h-screen font-sans text-foreground antialiased">
         <ConvexClientProvider url={CONVEX_URL}>{children}</ConvexClientProvider>
       </body>

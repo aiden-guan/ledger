@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Mark } from "@/components/brand/mark";
+import { ThemeToggle } from "@/components/brand/theme-toggle";
 
 export function LandingNav() {
   return (
@@ -9,9 +10,10 @@ export function LandingNav() {
           <Mark />
           LedgerLens
         </Link>
+        <ThemeToggle className="ml-auto -mr-4" />
         <Link
           href="/overview"
-          className="ml-auto rounded-[var(--radius)] bg-foreground px-3.5 py-1.5 text-[13px] font-medium text-background transition-opacity hover:opacity-85"
+          className="rounded-[var(--radius)] bg-foreground px-3.5 py-1.5 text-[13px] font-medium text-background transition-opacity hover:opacity-85"
         >
           Open the demo
         </Link>
