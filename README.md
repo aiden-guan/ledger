@@ -1,8 +1,8 @@
 # LedgerLens
 
-LedgerLens shows a small online business its **money river**: every dollar of revenue flowing out to product costs, shipping, team, marketing, software, overhead and, finally, profit. An agent then investigates the ledger, finds where money is leaking out of that river, pulls competitor prices with an Apify Actor, measures each leak in exact cents, and **prepares the fix**: a refund request email, a plan review email, or a ready price change. When the owner approves a fix, the leak seals and the profit stream visibly widens. Nothing is ever sent or changed without the owner, and every decision is written to an audit trail.
+LedgerLens puts a small online business's books on one screen: every sale and every payment of the last six months is one square, placed by day and by amount, with money in above the line and money out below it. An agent then investigates the ledger, pulls competitor prices with an Apify Actor, measures each leak in exact cents, lights up the records each leak rests on, and **prepares the fix**: a refund request email, a plan review email, or a ready price change. The owner decides one fix at a time. Nothing is ever sent or changed without them, and every decision is written to an audit trail.
 
-"Preview with fixes" redraws the river as if every prepared fix were approved, so an owner sees the size of the opportunity before deciding anything.
+The 90-day cash forecast beside each decision shows cash as it is, with the fixes approved so far, and with every prepared fix, so an owner sees the size of the opportunity before deciding anything.
 
 The seeded demo company, **Acme Outdoor Co.**, has four leaks for LedgerLens to find:
 
@@ -30,10 +30,10 @@ The investigation above is the **slow loop**: it reads six months of books, gath
 ```
   Browser                      Convex deployment
   ┌──────────────┐  live    ┌────────────────────────────────────────────────┐
-  │ Dashboard    │◄────────►│ queries     dashboard.get, investigations.     │
-  │ Timeline     │ websocket│             timeline, findings.detail, ...     │
-  │ Finding      │          │ mutations   investigations.start,              │
-  │ Audit log    │          │             recommendations.approve / reject   │
+  │ Overview     │◄────────►│ queries     field.get, dashboard.get,          │
+  │ Finding      │ websocket│             investigations.timeline, ...       │
+  │ Audit log    │          │ mutations   investigations.start,              │
+  │              │          │             recommendations.approve / reject   │
   └──────▲───────┘          │                    │ scheduler.runAfter(0)     │
          │ SSR preload      │                    ▼                           │
   ┌──────┴───────┐          │ ┌──── engine.run (Node action) ──────────────┐ │
@@ -69,7 +69,9 @@ Every engine step is a Convex mutation, so each timeline event, finding and appr
 | `lib/apify/` | Apify client (start, poll, fetch dataset), Zod validation of Actor output, normalization, and the labeled fixture fallback. |
 | `lib/ai/` | Provider interface, Anthropic provider, deterministic provider, prompts, schemas and grounding checks. |
 | `lib/views/` | Pure builders for the dashboard and finding detail shapes, shared by Convex queries and the UI. |
-| `lib/river/` | Stream definitions shared by the server query that measures the river and the animated SVG that draws it. |
+| `lib/field/` | The overview's field: every record with its day and amount, and the records, cost change and competitor prices each finding rests on. `convex/field.ts` serves it live; the offline preview builds the same shape. |
+| `components/overview/` | The overview: five beats (books, investigate, decide, screen, ask) over one canvas field, fed by live Convex subscriptions or by an offline replay of the engine. |
+| `lib/river/` | Spending streams (product costs, shipping, team, marketing, software, overhead) used by the dashboard query and to tag findings. |
 | `lib/investigation/drafts.ts` | Builds the prepared fix for each finding (emails and price changes) from deterministic finding data only. |
 | `lib/watch/` | The payment screen and the demo bank feed. `convex/watch.ts` runs it on each arriving payment and applies the autopilot policy. |
 | `lib/ask/` | Books tools, answer grounding and the vendor-neutral agent loop. `convex/ask.ts` stores questions; `convex/agent.ts` runs Claude's tool loop. |
@@ -123,7 +125,7 @@ npx convex env set APIFY_TOKEN             # optional: live competitor pricing
 npx convex env set APIFY_ACTOR_ID          # e.g. your-username/ledgerlens-competitor-pricing
 npx convex env set EXTERNAL_INTEL_MODE live
 npm run demo:seed
-npm run dev                    # http://localhost:3000 (dashboard at /overview)
+npm run dev                    # http://localhost:3000 (the app at /overview)
 ```
 
 You can also enter them in the Convex dashboard under Settings → Environment Variables.
@@ -223,16 +225,17 @@ That pushes the Convex functions and builds Next.js against the production deplo
 
 With `DEMO_MODE=true` (on the Convex deployment) the header shows **Reset demo** and the demo seed and reset functions run. With it off, they refuse with FORBIDDEN and the button is hidden. The suggested demo:
 
-1. Open the landing page and scroll: the tree grows from Acme Outdoor Co.'s books to its findings. Click a finding to grow twigs out to its evidence. Keep scrolling: the tree condenses into a drop that falls into still water, and two koi come up to swim the two loops described below. Then click **Open the demo**. The dashboard's money river shows where the company's revenue goes and how thin its profit is.
-2. Click **Investigate again** (or **Run investigation** on a fresh seed). Suspected leaks appear on the river as the agent works, then turn into measured amounts.
-3. Click **Preview with fixes** to see profit with every prepared fix approved.
-4. Open the highest-value leak: review the prepared fix, the calculations and the source evidence.
-5. Click **Approve fix**. The leak seals, the audit trail records the approval, and the profit stream widens on the dashboard.
-6. Click **Reset demo** to start over.
+1. Open the landing page and scroll: the tree grows from Acme Outdoor Co.'s books to its findings. Click a finding to grow twigs out to its evidence. Keep scrolling: the tree condenses into a drop that falls into still water, and two koi come up to swim the two loops described below. Then click **Open the demo**.
+2. **Books.** The overview fills in with every record of the last six months, one square each. Press → to move between beats (or click them on the left); ↵ always does the beat's one thing.
+3. **Investigate.** Press ↵. A scan line sweeps the books as the engine works through its ten steps, records it suspects turn pale orange, and each leak lights up in orange as it is measured, with its label and amount.
+4. **Decide.** One fix at a time. The field zooms to the records behind it (the bottle's sales under the supplier's cost step, the two identical Summit payments, the daypack's price against three competitors, the Relay Inbox charges), with the drafted email or price change below. Press ↵ to approve: the records turn blue and the forecast picks up the fix. → moves to the next fix.
+5. **Screen.** Press ↵ to start the bank feed. Ten payments arrive over about half a minute, each screened before it posts. The lookalike supplier, the invoice that was already paid and the payment above the approval limit stop past today's column. Press b to block or r to release.
+6. **Ask.** Click a suggestion, or press / and type. The answer cites its records, and the field pins each one.
+7. Press d at any time for the engine's step timings, the inputs, the audit trail and the live subscriptions. **Reset demo** starts over.
 
 ## Limitations
 
-- The money river shows the trailing 90 days multiplied by 4, the same annualization the findings use. Seasonal businesses will see a different picture at different times of year.
+- Margin and pricing findings annualize the trailing 90 days of unit sales (multiplied by 4). Seasonal businesses will see different figures at different times of year.
 - Single organization per deployment; there is no authentication or multi-tenant access control. Do not put real financial data in a public demo deployment.
 - Data comes from the seed. There are no bank, Shopify or accounting integrations yet.
 - LedgerLens does not execute financial actions. Approval produces a checklist and marks the recommendation Ready for execution.
@@ -256,13 +259,17 @@ The landing page, fully grown. The roots are the demo company's books, the trunk
 
 ![Landing page, past the tree](docs/screenshots/landing-pond.png)
 
-The money river after an investigation, with each leak marked where it drains:
+The overview after an investigation: 1,187 records, four leaks lit up in orange, each label pointing at the record it was measured from:
 
-![Dashboard](docs/screenshots/dashboard.png)
+![Overview, investigate](docs/screenshots/overview-investigate.png)
 
-The same river with every prepared fix approved:
+Deciding a fix: the field zooms to the bottle's sales lane, the supplier's cost step from $22 to $29 and three competitor prices, with the price change drafted below:
 
-![River preview](docs/screenshots/river-preview.png)
+![Overview, decide](docs/screenshots/overview-decide.png)
+
+Screening the bank feed: the lookalike supplier, an invoice already paid and a payment above the approval limit stop before they post:
+
+![Overview, screen](docs/screenshots/overview-screen.png)
 
 A leak with its fix already prepared, plus the evidence behind it:
 
@@ -272,6 +279,6 @@ On a phone:
 
 ![Mobile](docs/screenshots/mobile.png)
 
-The look is a field notebook: warm paper, black ink, hairline rules, and two pigments. Blue is the books; orange is money the engine found. Type is Geist, with anything measured set in Geist Mono. The landing tree is generated from a fixed seed (`lib/landing/tree.ts`) and drawn on a pixel grid on a canvas, one frame per scroll position; the drop, ripples and koi that follow it (`lib/landing/pond.ts`) are drawn on the same grid. The money river is drawn as line ribbons on a canvas. Every figure on the landing page comes from running the engine over the demo books at build time (`lib/landing/data.ts`). The site follows the system light or dark setting and respects reduced motion.
+The look is a field notebook: warm paper, black ink, hairline rules, and two pigments. Blue is the books; orange is money the engine found. Type is Geist, with anything measured set in Geist Mono. The landing tree is generated from a fixed seed (`lib/landing/tree.ts`) and drawn on a pixel grid on a canvas, one frame per scroll position; the drop, ripples and koi that follow it (`lib/landing/pond.ts`) are drawn on the same grid. The overview's field is drawn on a canvas too: each square eases to its color on its own clock, so a finding spreads through its records from the one its label points at, and the amount scale glides when a fix is brought into focus. Every figure on the landing page comes from running the engine over the demo books at build time (`lib/landing/data.ts`). The site follows the system light or dark setting and respects reduced motion.
 
 In development, `/preview/overview`, `/preview/findings/0` and `/preview/activity` render the app views from an in-memory engine run, without a Convex deployment (`?approved=1` on a finding shows the approved state). These routes return 404 in production.

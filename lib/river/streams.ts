@@ -1,6 +1,6 @@
 /**
- * The money river: where each dollar of revenue goes. Shared by the server query that
- * measures the flows and the client component that draws them, so it must stay pure.
+ * Where each dollar of revenue goes. Shared by the dashboard query that measures the flows and
+ * the engine that tags each finding with the stream it drains, so it must stay pure.
  */
 export const STREAMS = [
   { key: "cogs", label: "Product costs" },

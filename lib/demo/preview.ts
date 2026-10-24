@@ -3,6 +3,7 @@ import { DEFAULT_POLICY, screenPayment, type HistoryEntry } from "@/lib/watch/sc
 import { FEED_SCRIPT } from "@/lib/watch/script";
 import { buildExecutionChecklist } from "@/lib/investigation/actions";
 import { buildDashboard, toFindingListItem, type DashboardData } from "@/lib/views/dashboard";
+import { buildField, type FieldData } from "@/lib/field/model";
 import { buildFindingDetail, type AuditEntryDTO, type FindingDetail } from "@/lib/views/findings";
 import { runDemoOffline, type OfflineRun } from "./offline-run";
 
@@ -14,6 +15,9 @@ import { runDemoOffline, type OfflineRun } from "./offline-run";
 const ANCHOR = new Date("2026-10-24T00:00:00Z");
 let cached: Promise<OfflineRun> | null = null;
 const run = () => (cached ??= runDemoOffline(ANCHOR));
+
+/** The cached offline run itself, for previews that replay its timeline. */
+export const previewRun = run;
 
 export async function previewDashboard(approved: number[] = []): Promise<DashboardData> {
   const r = await run();
@@ -52,6 +56,26 @@ export async function previewDashboard(approved: number[] = []): Promise<Dashboa
         merchantName: t.merchantName,
       })),
     },
+  });
+}
+
+/** The field (every record, and which records each finding rests on) from the offline run. */
+export async function previewField(): Promise<FieldData> {
+  const r = await run();
+  return buildField({
+    organizationName: r.ledger.organization.name,
+    products: r.data.products.map((p) => ({ id: p.sku, sku: p.sku, name: p.name, sellingPriceCents: p.sellingPriceCents })),
+    sales: r.data.sales.map((s, i) => ({ id: `sale-${i}`, productId: s.sku, orderId: s.orderId, soldAt: s.soldAt, grossRevenueCents: s.grossRevenueCents })),
+    costs: r.data.supplierCosts.map((c) => ({ productId: c.sku, effectiveDate: c.effectiveDate, unitCostCents: c.unitCostCents, supplierName: c.supplierName })),
+    transactions: r.data.transactions.map((t, i) => ({ ...t, id: `tx-${i}` })),
+    investigation: { id: "offline", completedAt: r.investigation.completedAt ?? null, metadata: r.investigation.metadata ?? {} },
+    findings: r.findings.map((b, i) => ({
+      ...b.finding,
+      id: String(i),
+      status: "OPEN",
+      evidence: b.evidence.map((e) => ({ ...e, sourceReference: e.sourceReference ?? null })),
+      recommendation: { id: `rec-${i}`, status: "PROPOSED" as const, title: b.recommendation.title, metadata: b.recommendation.metadata },
+    })),
   });
 }
 

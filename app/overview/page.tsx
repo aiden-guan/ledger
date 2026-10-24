@@ -1,14 +1,14 @@
 import { preloadQuery } from "convex/nextjs";
 import { api } from "@/convex/_generated/api";
 import { AppHeader } from "@/components/layout/app-header";
-import { DashboardView } from "@/components/dashboard/dashboard-view";
 import { SystemErrorPanel } from "@/components/dashboard/empty-states";
+import { LiveOverview } from "@/components/overview/overview";
 import { isConvexConfigured } from "@/lib/convex/config";
 import { logger } from "@/lib/utils/logger";
 
 export const dynamic = "force-dynamic";
 
-export default async function DashboardPage() {
+export default async function OverviewPage() {
   if (!isConvexConfigured()) {
     return (
       <>
@@ -18,8 +18,8 @@ export default async function DashboardPage() {
     );
   }
   try {
-    const preloaded = await preloadQuery(api.dashboard.get, {});
-    return <DashboardView preloaded={preloaded} />;
+    const [dashboard, field] = await Promise.all([preloadQuery(api.dashboard.get, {}), preloadQuery(api.field.get, {})]);
+    return <LiveOverview dashboard={dashboard} field={field} />;
   } catch (error) {
     logger.error("dashboard_load_failed", { error: error instanceof Error ? error.message : String(error) });
     return (

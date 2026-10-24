@@ -15,6 +15,7 @@ import type * as crons from "../crons.js";
 import type * as dashboard from "../dashboard.js";
 import type * as data from "../data.js";
 import type * as engine from "../engine.js";
+import type * as field from "../field.js";
 import type * as findings from "../findings.js";
 import type * as investigations from "../investigations.js";
 import type * as model from "../model.js";
@@ -37,6 +38,7 @@ import type * as watch from "../watch.js";
 "dashboard": typeof dashboard,
 "data": typeof data,
 "engine": typeof engine,
+"field": typeof field,
 "findings": typeof findings,
 "investigations": typeof investigations,
 "model": typeof model,
