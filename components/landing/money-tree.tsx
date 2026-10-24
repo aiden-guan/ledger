@@ -11,6 +11,7 @@ import { DROP_HEART, FINS, GLINT, type KoiDot, type Loop, POND, SPINE, TAIL, TIP
 import { type River, SHADOW, type Way, banks, centre, currents, layRiver, pace, riverWay, rockEdge, rockInk, sample, track, wayOut } from "@/lib/landing/river";
 import { type Anchor, CLOCK, type Dot, type Ink, INK, INK_PRIORITY, PART, growTree, sprout, visibleCount } from "@/lib/landing/tree";
 import { cn } from "@/lib/utils/cn";
+import { scroller } from "./smooth-scroll";
 
 /*
  * The landing page is one tree, drawn on a pixel grid. Roots are the books the engine reads, the
@@ -1294,7 +1295,9 @@ export function MoneyTree({ data }: { data: LandingData }) {
     if (!sec) return;
     const top = sec.getBoundingClientRect().top + window.scrollY;
     const travel = sec.offsetHeight - window.innerHeight;
-    window.scrollTo({ top: top + (at / TRAVEL_VH) * travel, behavior: "smooth" });
+    const to = top + (at / TRAVEL_VH) * travel;
+    if (scroller) scroller.scrollTo(to, { duration: 1.6 });
+    else window.scrollTo({ top: to, behavior: "smooth" });
   };
 
   const chapters = [
