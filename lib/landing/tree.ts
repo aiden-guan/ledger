@@ -9,11 +9,11 @@
  * limb's growth that is orange is proportional to how much money that finding recovers.
  */
 
-/** What a dot is made of. The renderer maps each to a colour. */
-export const INK = { bark: 0, shadow: 1, rust: 2, moss: 3, mossLight: 4, fruit: 5, fruitPale: 6, dust: 7, navy: 8 } as const;
+/** What a dot is made of. The renderer maps each to a colour. The last four only bloom in the pond at the end. */
+export const INK = { bark: 0, shadow: 1, rust: 2, moss: 3, mossLight: 4, fruit: 5, fruitPale: 6, dust: 7, navy: 8, petal: 9, petalPale: 10, gold: 11, violet: 12 } as const;
 export type Ink = (typeof INK)[keyof typeof INK];
 /** When two dots land on one pixel, the higher one shows. */
-export const INK_PRIORITY = [2, 4, 3, 6, 5, 8, 7, 1, 4];
+export const INK_PRIORITY = [2, 4, 3, 6, 5, 8, 7, 1, 4, 8, 7, 9, 8];
 
 /** Which part of the tree a dot belongs to: limbs are 0-3, then the trunk, crown and roots. */
 export const PART = { trunk: 4, crown: 5, root: (i: number) => 6 + i } as const;

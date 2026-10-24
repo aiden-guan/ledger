@@ -6,7 +6,9 @@ import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { format } from "@/lib/finance/money";
 import type { LandingData } from "@/lib/landing/data";
-import { DROP_HEART, FINS, GLINT, type Loop, POND, SPINE, TAIL, TIP, WATER, bayer, condense, dropInk, hash2, headAngle, koiDots, koiHalf, loopAt, ripples, splash, swim } from "@/lib/landing/pond";
+import { type Garden, flowerInk, layGarden, padInk } from "@/lib/landing/garden";
+import { DROP_HEART, FINS, GLINT, type KoiDot, type Loop, POND, SPINE, TAIL, TIP, WATER, bayer, condense, dropInk, follow, hash2, headAngle, koiDots, koiHalf, loopAt, ripples, splash, swim } from "@/lib/landing/pond";
+import { type River, SHADOW, type Way, banks, centre, currents, layRiver, pace, riverWay, rockEdge, rockInk, sample, track, wayOut } from "@/lib/landing/river";
 import { type Anchor, CLOCK, type Dot, type Ink, INK, INK_PRIORITY, PART, growTree, sprout, visibleCount } from "@/lib/landing/tree";
 import { cn } from "@/lib/utils/cn";
 
@@ -17,16 +19,25 @@ import { cn } from "@/lib/utils/cn";
  * scrolling back un-grows it. Opening a finding grows twigs out to its evidence.
  *
  * Grown, the tree condenses into a drop that falls into still water. Two koi come up and swim the
- * product's two loops, and the page says what each one does.
+ * product's two loops, and the page says what each one does. Then the slow loop's koi swims off
+ * down a river, around a rock for each kind of trouble the product deals with, to a pond at the
+ * bottom that blooms as it arrives. The page ends there.
  */
 
-// Scroll distances, in viewport heights: the tree grows, holds a moment, then the water clock runs.
+// Scroll distances, in viewport heights: the tree grows, holds a moment, then the water clock runs
+// (w goes from 0 to 1 over WATER_VH) until the koi leaves, and the river takes the rest.
 const TREE_VH = 430;
 const HOLD_VH = 30;
 const WATER_VH = 300;
-const TRAVEL_VH = TREE_VH + HOLD_VH + WATER_VH;
+const RIVER_AT = TREE_VH + HOLD_VH + WATER.leave * WATER_VH;
+const RIVER_VH = 380;
+/** The last of it, with the koi at rest in the pond. */
+const REST_VH = 45;
+const TRAVEL_VH = RIVER_AT + RIVER_VH;
 const START = CLOCK.roots[1];
-const INKS = 9;
+const INKS = 13;
+/** Scroll px between entries of the koi's pace and camera tables. */
+const STEP = 2;
 /** Tail beats a second for each koi: the fast loop's swims harder. */
 const BEATS = [1.3, 0.8];
 
@@ -56,13 +67,23 @@ const NOTES: Note[] = [
   { key: "slow", name: "Every morning", sub: "A full investigation, unasked.", tag: "slow loop", part: POND.koi(1) },
 ];
 
-// Ink colours by INK index: bark, shadow, rust, moss, light moss, fruit, pale fruit, dust, navy.
+/** The rocks in the river: trouble a small business runs into, and what LedgerLens does about it. */
+const ROCKS = [
+  { key: "fake", name: "Fake invoices", sub: "Lookalike payees and new bank details, held." },
+  { key: "twice", name: "Paying twice", sub: "Repeat invoices held, refund requests drafted." },
+  { key: "costs", name: "Rising costs", sub: "Supplier and subscription rises, to the cent." },
+  { key: "price", name: "Underpricing", sub: "Competitors' prices read, a new price ready." },
+  { key: "ask", name: "Questions about the books", sub: "Answered with the records behind each claim." },
+];
+
+// Ink colours by INK index: bark, shadow, rust, moss, light moss, fruit, pale fruit, dust, navy,
+// then the pond's petal, pale petal, gold and violet.
 const PALETTES = {
-  light: { inks: ["#9b958b", "#161616", "#7a3524", "#1f63e6", "#86b4f6", "#ee7f2d", "#f5b867", "#bcb7ad", "#13307a"], bg: [246, 244, 238] },
-  dark: { inks: ["#8a847a", "#ebe5d9", "#c0644a", "#4f8dff", "#2f5fc0", "#ff9440", "#b06a2e", "#58544d", "#9db8ff"], bg: [13, 13, 14] },
+  light: { inks: ["#9b958b", "#161616", "#7a3524", "#1f63e6", "#86b4f6", "#ee7f2d", "#f5b867", "#bcb7ad", "#13307a", "#e0457b", "#f4abc2", "#e5a21a", "#6a4bd0"], bg: [246, 244, 238] },
+  dark: { inks: ["#8a847a", "#ebe5d9", "#c0644a", "#4f8dff", "#2f5fc0", "#ff9440", "#b06a2e", "#58544d", "#9db8ff", "#ff6b9d", "#9c3a60", "#ffc23d", "#9b82ff"], bg: [13, 13, 14] },
 };
 /** What each ink looks like further down in the water. */
-const DEEP: Ink[] = [INK.dust, INK.bark, INK.fruitPale, INK.mossLight, INK.dust, INK.fruitPale, INK.dust, INK.dust, INK.moss];
+const DEEP: Ink[] = [INK.dust, INK.bark, INK.fruitPale, INK.mossLight, INK.dust, INK.fruitPale, INK.dust, INK.dust, INK.moss, INK.petalPale, INK.dust, INK.fruitPale, INK.dust];
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 const smooth = (a: number, b: number, v: number) => {
@@ -77,10 +98,16 @@ function hex(c: string) {
   const n = parseInt(c.slice(1), 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
-/** A colour pushed `k` of the way toward the paper. */
-function fade(c: string, bg: number[], k: number) {
+const BYTES = new Uint8ClampedArray(4);
+const PIXEL = new Uint32Array(BYTES.buffer);
+/** A colour pushed `k` of the way toward the paper, as one pixel of image data. */
+function pixel(c: string, bg: number[], k: number) {
   const [r, g, b] = hex(c);
-  return `rgb(${Math.round(lerp(r, bg[0], k))} ${Math.round(lerp(g, bg[1], k))} ${Math.round(lerp(b, bg[2], k))})`;
+  BYTES[0] = lerp(r, bg[0], k);
+  BYTES[1] = lerp(g, bg[1], k);
+  BYTES[2] = lerp(b, bg[2], k);
+  BYTES[3] = 255;
+  return PIXEL[0];
 }
 
 type Controls = { hover: (key: string, part: number) => void; open: (leak: number | null) => void };
@@ -91,7 +118,8 @@ export function MoneyTree({ data }: { data: LandingData }) {
     const max = Math.max(1, ...leaks.map((l) => l.cents));
     return growTree(leaks.map((l) => l.cents / max));
   }, [leaks]);
-  const fish = useMemo(() => [koiDots("fast", 31), koiDots("slow", 47)], []);
+  // The two loops' koi, then the three that live in the pond at the end.
+  const fish = useMemo(() => [koiDots("fast", 31), koiDots("slow", 47), koiDots("fast", 53), koiDots("gold", 71), koiDots("slow", 89)], []);
   const [open, setOpen] = useState<number | null>(null);
 
   const nodes: Node[] = useMemo(() => {
@@ -133,9 +161,11 @@ export function MoneyTree({ data }: { data: LandingData }) {
   const found = useRef<HTMLSpanElement>(null);
   const yieldRef = useRef<HTMLDivElement>(null);
   const closing = useRef<HTMLDivElement>(null);
+  const foot = useRef<HTMLElement>(null);
   const rail = useRef<HTMLOListElement>(null);
   const nodeEls = useRef<Record<string, HTMLDivElement | null>>({});
   const noteEls = useRef<Record<string, HTMLDivElement | null>>({});
+  const rockEls = useRef<(HTMLDivElement | null)[]>([]);
   // Set by the drawing effect, so handlers can reach it without re-rendering.
   const ctl = useRef<Controls>({ hover: () => undefined, open: () => undefined });
 
@@ -148,6 +178,13 @@ export function MoneyTree({ data }: { data: LandingData }) {
     if (!cv || !st || !sec) return;
     const ctx = cv.getContext("2d");
     if (!ctx) return;
+    // The grid is drawn as a small image, one pixel a cell, then scaled up, and the hairlines
+    // between pixels are cleared with a repeating tile.
+    const pix = document.createElement("canvas");
+    const pctx = pix.getContext("2d");
+    const tile = document.createElement("canvas");
+    if (!pctx) return;
+    let hairlines: CanvasPattern | null = null;
 
     const dark = window.matchMedia("(prefers-color-scheme: dark)");
     const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -166,8 +203,13 @@ export function MoneyTree({ data }: { data: LandingData }) {
     let grid = new Uint8Array(0);
     let gpart = new Uint8Array(0);
     let gprio = new Uint8Array(0);
-    let buckets: Int32Array[] = [];
-    const counts = new Int32Array(INKS * 2);
+    let img = new ImageData(1, 1);
+    let px32 = new Uint32Array(img.data.buffer);
+    // Each ink in focus and faded back, and what they were worked out for.
+    const colors = new Uint32Array(INKS * 2);
+    let colorsFor = { pal, focus: -1 };
+    // Shapes on the water that have stopped changing, kept as cells.
+    const kept = new WeakMap<object, { fx: number; fy: number; tilt: number; night: boolean; cells: Int32Array }>();
     let intro = still ? START : 0;
     let scrolled = 0;
     let onScreen = true;
@@ -196,13 +238,17 @@ export function MoneyTree({ data }: { data: LandingData }) {
     let reach = 0;
     let loops: Loop[] = [];
     let lens = [0, 0];
+    // Phase added to a koi's loop after it comes back to it from the river, so it carries on from there.
+    const shift = [0, 0];
+    // The river koi's tail beat, as a phase, since its beat changes as it slows.
+    let tail = 0;
     // For the condense: each tree dot on screen in the grown tree, where it lands in the drop, the
     // drop's ink there, and when it sets off.
     let from = new Float32Array(0);
     let to = new Float32Array(0);
     let toInk = new Int8Array(0);
     let delay = new Float32Array(0);
-    const spines = [new Float64Array(SPINE * 4), new Float64Array(SPINE * 4)];
+    const spines = fish.map(() => new Float64Array(SPINE * 4));
     // Where the water's centre is on screen, and how flat it looks (1 is straight down on it).
     let surface = { x: 0, y: 0, tilt: 0.3 };
     // Small rings that spread on their own: koi touching the surface, and the pointer.
@@ -210,6 +256,20 @@ export function MoneyTree({ data }: { data: LandingData }) {
     const born = performance.now();
     const nextRing = [born + 2400, born + 4100];
     let lastRing: { x: number; y: number } | null = null;
+
+    // The river below the pond and the pond at its end, laid out by measure(): the river, the koi's
+    // way down it, the banks as dots, and the garden.
+    let river: River | null = null;
+    let riverPath: { xy: Float64Array; mouth: number } = { xy: new Float64Array(0), mouth: 0 };
+    let garden: Garden | null = null;
+    let bankDots = new Float32Array(0);
+    let pebbles: { x: number; y: number; ink: Ink }[] = [];
+    // Where the camera stops, and where it holds the koi's snout on the way down.
+    let bottomDescent = 0;
+    let hold = 0;
+    // Set while the koi is off its loop: where it left it, its way, and the pace and camera tables
+    // for it, with the scroll at which it passes the river's mouth.
+    let journey: { angle: number; way: Way; swum: Float64Array; cam: Float64Array; mouthAt: number } | null = null;
 
     const { minX, maxX, minY, maxY } = tree.bounds;
     const fullW = maxX - minX + 0.06;
@@ -260,6 +320,20 @@ export function MoneyTree({ data }: { data: LandingData }) {
     const travel = () => scrolled * TRAVEL_VH;
     const clock = () => (scrolled > 0 ? Math.max(intro, START + (1 - START) * clamp01(travel() / TREE_VH)) : intro);
     const water = () => clamp01((travel() - TREE_VH - HOLD_VH) / WATER_VH);
+    /** Scroll px since the koi left its loop (negative before). */
+    const downstream = () => ((travel() - RIVER_AT) * vh) / 100;
+    const loopNow = (k: number) => (shift[k] ? { ...loops[k], phase: loops[k].phase + shift[k] } : loops[k]);
+
+    /** The koi leaves its loop from wherever it is on it, at `angle`. */
+    function setOff(angle: number) {
+      const way = wayOut(loops[1], angle, lens[1], riverPath);
+      const total = (RIVER_VH * vh) / 100;
+      const swum = pace(way, ((RIVER_VH - REST_VH) * vh) / 100, STEP, total);
+      const cam = track(way, swum, hold, bottomDescent, STEP);
+      let k = 0;
+      while (k < swum.length - 1 && swum[k] < way.mouth) k++;
+      journey = { angle, way, swum, cam, mouthAt: k * STEP };
+    }
 
     function draw() {
       frame = 0;
@@ -274,6 +348,8 @@ export function MoneyTree({ data }: { data: LandingData }) {
       // and palest blues trade places, and the highlight is drawn instead of left as paper.
       const night = pal === PALETTES.dark;
       const shade = (ink: number) => (!night ? ink : ink === INK.navy ? INK.mossLight : ink === INK.mossLight ? INK.navy : ink);
+      /** The same for stone, whose pale and dark greys trade places too. */
+      const stone = (ink: number) => (!night ? ink : ink === INK.dust ? INK.bark : ink === INK.bark ? INK.dust : shade(ink));
       const { s, ox, oy } = camera(g);
       const X = (x: number) => ox + x * s;
       const Y = (y: number) => oy + y * s;
@@ -416,7 +492,18 @@ export function MoneyTree({ data }: { data: LandingData }) {
       const fall = clamp01((w - WATER.fall[0]) / (WATER.fall[1] - WATER.fall[0]));
       const under = clamp01((w - WATER.impact) / 0.02);
       const overhead = smooth(WATER.tilt[0], WATER.tilt[1], w);
-      surface = { x: vw / 2, y: lerp(splashY, pondY, overhead), tilt: lerp(0.3, flat, overhead) };
+      // Down the river, the camera follows the koi once it leaves its loop.
+      const u = downstream();
+      if (u > 0 && !journey && loops.length) setOff(headAngle(loopNow(1), t));
+      else if (u <= 0 && journey) {
+        // Back on its loop where it left it, carrying on from there.
+        shift[1] = journey.angle - headAngle(loops[1], t);
+        journey = null;
+      }
+      const descent = journey ? sample(journey.cam, STEP, u) : 0;
+      surface = { x: vw / 2, y: lerp(splashY, pondY, overhead) - descent * flat, tilt: lerp(0.3, flat, overhead) };
+      // Moving in whole pixels keeps what stands still on the water from shimmering.
+      if (descent > 0) surface.y = Math.round(surface.y / cell) * cell;
       if (cl > 0.75 && under < 1) {
         // Stretched a little by the fall; once it meets the water it keeps going, and the water
         // hides what has gone under.
@@ -441,25 +528,62 @@ export function MoneyTree({ data }: { data: LandingData }) {
         for (const q of ripples(w, reach, drop.r)) ring(cx, cy, q.r, tilt, q.a, [INK.moss, INK.mossLight, INK.moss, INK.dust][q.k], POND.water, 6 - q.k, 11 + q.k);
       }
 
-      // The koi, each on its loop. They come up out of the deep a few dots at a time, pale at first.
-      for (let k = 0; k < 2; k++) {
-        const rise = smooth(WATER.koi[k][0], WATER.koi[k][1], w);
-        if (rise <= 0) continue;
-        const part = POND.koi(k);
-        // The loop draws itself once its note is due, starting from the note's marker.
-        const traced = smooth(WATER.notes[k] - 0.06, WATER.notes[k] + 0.02, w);
-        if (traced > 0) {
-          const start = k === 0 ? Math.PI : 0;
-          const steps = Math.ceil((Math.PI * 2 * loops[k].r) / (cell * 3));
-          for (let j = 0; j <= steps * traced; j++) {
-            const [x, y] = loopAt(loops[k], start + (j / steps) * Math.PI * 2);
-            put(Math.floor((surface.x + x) / cell), Math.floor((surface.y + y * surface.tilt) / cell), INK.dust, part, 1);
+      /** Where a point on the water is on screen, and a pixel there. */
+      const sx = (x: number) => surface.x + x;
+      const sy = (y: number) => surface.y + y * surface.tilt;
+      const plot = (x: number, y: number, ink: number, part: number, z: number) => put(Math.floor(sx(x) / cell), Math.floor(sy(y) / cell), ink, part, z);
+      /** A shape on the water around (x, y), out to `reach` px: `ink` gives each pixel's ink from its offset and dither, or -1. */
+      const raster = (x: number, y: number, reach: number, ink: (lx: number, ly: number, d: number, cx: number, cy: number) => number, part: number, z: number) => {
+        const px = sx(x);
+        const py = sy(y);
+        const cx0 = Math.floor(px / cell);
+        const cy0 = Math.floor(py / cell);
+        const span = Math.ceil(reach / cell) + 1;
+        if (cy0 + span < 0 || cy0 - span >= gh || cx0 + span < 0 || cx0 - span >= gw) return;
+        for (let cy = Math.max(0, cy0 - span); cy <= Math.min(gh - 1, cy0 + span); cy++) {
+          for (let cx = Math.max(0, cx0 - span); cx <= Math.min(gw - 1, cx0 + span); cx++) {
+            const v = ink((cx + 0.5) * cell - px, ((cy + 0.5) * cell - py) / surface.tilt, bayer(cx - cx0, cy - cy0), cx - cx0, cy - cy0);
+            if (v >= 0) put(cx, cy, v, part, z);
+          // Shade on the water beneath it.
+          else if (v === SHADOW) put(cx, cy, INK.dust, part, 1);
           }
         }
-        const len = lens[k] * (0.86 + 0.14 * rise);
-        const sp = swim(loops[k], len, BEATS[k], t, spines[k]);
-        const at = (u: number) => {
-          const f = (u / TAIL) * (SPINE - 1);
+      };
+      /** As raster, for a shape that has stopped changing: its cells are worked out once and kept, under `key`. */
+      const keep = (key: object, x: number, y: number, reach: number, ink: (lx: number, ly: number) => number, part: number, z: number) => {
+        const px = sx(x);
+        const py = sy(y);
+        const cx0 = Math.floor(px / cell);
+        const cy0 = Math.floor(py / cell);
+        const fx = px - cx0 * cell;
+        const fy = py - cy0 * cell;
+        let k = kept.get(key);
+        if (!k || Math.abs(k.fx - fx) > 1e-6 || Math.abs(k.fy - fy) > 1e-6 || k.tilt !== surface.tilt || k.night !== night) {
+          const span = Math.ceil(reach / cell) + 1;
+          const cells: number[] = [];
+          for (let oy = -span; oy <= span; oy++) {
+            for (let ox = -span; ox <= span; ox++) {
+              const v = ink((ox + 0.5) * cell - fx, ((oy + 0.5) * cell - fy) / surface.tilt);
+              if (v >= 0 || v === SHADOW) cells.push(ox, oy, v);
+            }
+          }
+          k = { fx, fy, tilt: surface.tilt, night, cells: Int32Array.from(cells) };
+          kept.set(key, k);
+        }
+        const c = k.cells;
+        for (let i = 0; i < c.length; i += 3) {
+          if (c[i + 2] >= 0) put(cx0 + c[i], cy0 + c[i + 1], c[i + 2], part, z);
+          else put(cx0 + c[i], cy0 + c[i + 1], INK.dust, part, 1);
+        }
+      };
+      // The stretch of the water on screen.
+      const yTop = -surface.y / surface.tilt;
+      const yBot = (vh - surface.y) / surface.tilt;
+
+      /** A koi along spine `sp`, at (ox, oy) on the water, `rise` of the way up from the deep. `flap` sets its fins' phase. */
+      const drawKoi = (dots: KoiDot[], sp: Float64Array, len: number, rise: number, part: number, flap: number, ox = 0, oy = 0) => {
+        const at = (s: number) => {
+          const f = (s / TAIL) * (SPINE - 1);
           const i0 = Math.min(SPINE - 2, Math.floor(f));
           const a = i0 * 4;
           const b = a + 4;
@@ -471,14 +595,14 @@ export function MoneyTree({ data }: { data: LandingData }) {
           if (!i) return null;
           const [px, py, nx, ny] = at(F.s);
           const side = i % 2 ? 1 : -1;
-          const sweep = F.sweep + (i < 3 ? 0.22 : 0.12) * Math.sin(t * 3.6 + k * 1.7 + (i < 3 ? 0 : 1.1));
+          const sweep = F.sweep + (i < 3 ? 0.22 : 0.12) * Math.sin(t * 3.6 + flap + (i < 3 ? 0 : 1.1));
           // Out to the side, swept back toward the tail.
           const dx = nx * side * Math.cos(sweep) - ny * Math.sin(sweep);
           const dy = ny * side * Math.cos(sweep) + nx * Math.sin(sweep);
           const root = koiHalf(F.s) * len * 0.85 * side;
           return { x: px + nx * root, y: py + ny * root, dx, dy, len: F.len * len, wid: F.wid * len };
         });
-        for (const d of fish[k]) {
+        for (const d of dots) {
           if (d.h > rise * 1.2) continue;
           let x: number;
           let y: number;
@@ -492,12 +616,154 @@ export function MoneyTree({ data }: { data: LandingData }) {
             y = f.y + f.dy * d.s * f.len + f.dx * d.o * f.wid;
           }
           const ink = rise < 1 && d.h > rise * rise ? DEEP[d.ink] : d.ink;
-          put(Math.floor((surface.x + x) / cell), Math.floor((surface.y + y * surface.tilt) / cell), shade(ink), part, d.z);
+          put(Math.floor(sx(ox + x) / cell), Math.floor(sy(oy + y) / cell), shade(ink), part, d.z);
         }
+      };
+
+      // The koi, each on its loop. They come up out of the deep a few dots at a time, pale at first.
+      // The slow loop's koi may be off down the river.
+      let headY = -Infinity;
+      for (let k = 0; k < 2; k++) {
+        const rise = smooth(WATER.koi[k][0], WATER.koi[k][1], w);
+        if (rise <= 0) continue;
+        const part = POND.koi(k);
+        // The loop draws itself once its note is due, starting from the note's marker.
+        const traced = smooth(WATER.notes[k] - 0.06, WATER.notes[k] + 0.02, w);
+        if (traced > 0) {
+          const start = k === 0 ? Math.PI : 0;
+          const steps = Math.ceil((Math.PI * 2 * loops[k].r) / (cell * 3));
+          for (let j = 0; j <= steps * traced; j++) {
+            const [x, y] = loopAt(loops[k], start + (j / steps) * Math.PI * 2);
+            plot(x, y, INK.dust, part, 1);
+          }
+        }
+        const len = lens[k] * (0.86 + 0.14 * rise);
+        let sp: Float64Array;
+        if (k === 1 && journey) {
+          const s = sample(journey.swum, STEP, u);
+          // Its tail slows as it comes to rest. The beat is kept as a phase, so slowing never jumps it.
+          const resting = smooth(journey.way.end - lens[1] * 0.9, journey.way.end, s);
+          if (!still) tail += (dt / 1000) * lerp(1.05, 0.45, resting);
+          sp = follow(journey.way.xy, journey.way.at, s, len, 1, tail, lerp(1, 0.6, resting), spines[k]);
+          headY = sp[1];
+        } else sp = swim(loopNow(k), len, BEATS[k], t, spines[k]);
+        drawKoi(fish[k], sp, len, rise, part, k * 1.7);
         // Now and then a koi touches the surface.
         if (!still && rise >= 1 && now > nextRing[k]) {
           rings.push({ x: sp[0], z: sp[1], at: now, size: len * 0.5 });
           nextRing[k] = now + 3200 + hash2(k, Math.floor(now)) * 3200;
+        }
+      }
+
+      // The river: its banks, the current, and the rocks, from where the banks close in to the mouth.
+      if (river && journey) {
+        const shown = smooth(0, vh * 0.25, u);
+        for (let i = 0; i < bankDots.length; i += 2) {
+          const y = bankDots[i + 1];
+          if (y < yTop - 8 || y > yBot + 8 || (shown < 1 && hash2(i, 41) > shown)) continue;
+          plot(bankDots[i], y, INK.dust, POND.water, 2);
+        }
+        pebbles.forEach((p, i) => {
+          if (p.y > yTop - 8 && p.y < yBot + 8 && (shown >= 1 || hash2(i, 43) < shown)) plot(p.x, p.y, stone(p.ink), POND.water, 2);
+        });
+        if (yBot > river.top && yTop < river.bottom) {
+          currents(river, t, yTop - 20, yBot + 20).forEach((c, i) => {
+            if (c.fade < 1 && hash2(i, 47) > c.fade) return;
+            for (let j = 0; j < 3; j++) plot(c.x + c.dx * cell * j, c.y + c.dy * cell * j, INK.mossLight, POND.water, 1);
+          });
+        }
+        river.rocks.forEach((rock, i) => {
+          if (rock.y + rock.r * 3.5 < yTop || rock.y - rock.r * 1.4 > yBot) return;
+          const part = POND.rock(i);
+          raster(rock.x, rock.y, rock.r * 1.5, (lx, ly, d, ox, oy) => {
+            const ink = rockInk(lx, ly, rock, d, hash2(ox, oy + i * 97));
+            // On a dark screen the wet blue side is half grey, or it would glow.
+            if (ink === INK.navy && night && (ox + oy) & 1) return INK.dust;
+            return ink >= 0 ? stone(ink) : ink;
+          }, part, 10);
+          // Water piling up on its upstream side, and its wake running off behind it.
+          for (let j = 0; j < 15; j++) {
+            if (hash2(j, Math.floor(t * 3) + i * 31) > 0.72) continue;
+            const a = -Math.PI / 2 + (j / 14 - 0.5) * 2.7;
+            const e = rockEdge(rock, a) + cell * 1.6;
+            plot(rock.x + Math.cos(a) * e, rock.y + Math.sin(a) * e * 0.86, INK.mossLight, part, 3);
+          }
+          for (let j = 0; j < 10; j++) {
+            const v = (j + ((t * 0.7 + i * 0.37) % 1)) / 10;
+            for (const side of [-1, 1]) {
+              if (hash2(j * 2 + (side > 0 ? 1 : 0), i + 5) > (1 - v) * 1.15) continue;
+              plot(rock.x + side * rock.r * (0.96 + 0.55 * v), rock.y + rock.r * (0.2 + 2.6 * v), INK.mossLight, part, 3);
+            }
+          }
+        });
+      }
+
+      // The pond at the bottom. It blooms from the mouth as the koi swims in.
+      let bloom = 0;
+      if (garden && journey && yBot > garden.top - 60) {
+        const g0 = garden;
+        bloom = clamp01((u - journey.mouthAt) / (((RIVER_VH - 8) * vh) / 100 - journey.mouthAt));
+        const f = bloom;
+        const part = POND.garden;
+        // The bloom's front: rings running out into the pond from the mouth.
+        if (f > 0 && f < 0.62) {
+          const k = Math.sqrt(f / 0.62);
+          for (const [lag, ink, strength] of [[0, INK.mossLight, 0.9], [cell * 6, INK.dust, 0.45]] as const) {
+            const r = Math.max(0, k * g0.reach - lag);
+            const steps = Math.ceil((Math.PI * r) / (cell * 0.8));
+            for (let j = 0; j <= steps; j++) {
+              if (hash2(j, 21 + lag) > (1 - k) * strength) continue;
+              const a = (j / steps) * Math.PI;
+              plot(g0.mouth.x + Math.cos(a) * r, g0.mouth.y + Math.sin(a) * r, ink, part, 4);
+            }
+          }
+        }
+        // Light on the water, catching and letting go.
+        for (const g of g0.glints) {
+          if (f < g.at || hash2(Math.round(g.x), 51) > smooth(g.at, g.at + 0.15, f)) continue;
+          const x = g.x + g.rx * Math.sin(g.phase + g.speed * t);
+          const on = still ? 1 : 0.5 + 0.5 * Math.sin(g.phase * 3 + t * g.speed * 2.2);
+          for (let j = 0; j < g.len; j++) if (on > 0.3 + j * 0.2) plot(x + j * cell, g.y, g.ink, part, 2);
+        }
+        for (const b of g0.bushes) {
+          const e = smooth(b.at, b.at + 0.2, f);
+          if (e <= 0) continue;
+          const cx0 = Math.floor(sx(b.x) / cell);
+          const cy0 = Math.floor(sy(b.y) / cell);
+          if (cy0 < -40 || cy0 > gh + 40) continue;
+          for (const d of b.dots) if (d.h < e) put(cx0 + Math.round(d.x / cell), cy0 + Math.round(d.y / cell), d.ink, part, 10);
+        }
+        // Pads and flowers are worked out afresh only while they open.
+        for (const p of g0.pads) {
+          const e = smooth(p.at, p.at + 0.2, f);
+          if (e <= 0) continue;
+          const size = 1 + 2.2 * (e - 1) ** 3 + 1.2 * (e - 1) ** 2;
+          const ink = (lx: number, ly: number) => {
+            const v = padInk(lx, ly, p, size, cell);
+            return v >= 0 ? shade(v) : v;
+          };
+          if (e < 1) raster(p.x, p.y, p.r * size + cell * 3, ink, part, 11);
+          else keep(p, p.x, p.y, p.r + cell * 3, ink, part, 11);
+        }
+        for (const fl of g0.flowers) {
+          const e = smooth(fl.at, fl.at + 0.22, f);
+          const ink = (lx: number, ly: number) => flowerInk(lx, ly, fl, e, cell);
+          if (e > 0 && e < 1) raster(fl.x, fl.y, fl.r + cell, ink, part, 13);
+          else if (e >= 1) keep(fl, fl.x, fl.y, fl.r + cell, ink, part, 13);
+        }
+        g0.koi.forEach((k, i) => {
+          const rise = smooth(k.at, k.at + 0.16, f);
+          if (rise <= 0) return;
+          const len = k.len * (0.86 + 0.14 * rise);
+          drawKoi(fish[2 + i], swim(k.loop, len, 0.7, t, spines[2 + i]), len, rise, part, i * 2.3, k.x, k.y);
+        });
+        for (const p of g0.petals) {
+          if (f < p.at) continue;
+          const a = p.phase + p.speed * t;
+          const x = p.x + p.rx * Math.cos(a);
+          const y = p.y + p.ry * Math.sin(a);
+          plot(x, y, p.ink, part, 12);
+          if (f > p.at + 0.05) plot(x + (Math.cos(a * 2) > 0 ? cell : 0), y + (Math.cos(a * 2) > 0 ? 0 : cell), p.ink, part, 12);
         }
       }
       rings = rings.filter((q) => now - q.at < 1900);
@@ -507,32 +773,35 @@ export function MoneyTree({ data }: { data: LandingData }) {
         ring(surface.x + q.x, surface.y + q.z * surface.tilt, Math.max(0, u - 0.18) * q.size, surface.tilt, (1 - u) * 0.5, INK.dust, POND.water, 3, 6);
       }
 
-      // Sort cells into colour buckets (even: in focus, odd: faded back), then fill each as one path.
-      counts.fill(0);
+      // Each cell becomes one pixel of a small image, faded toward the paper where out of focus. It
+      // is drawn up to size in one go, and a hairline is cleared between neighbouring pixels.
+      if (colorsFor.pal !== pal || colorsFor.focus !== focus) {
+        for (let k = 0; k < INKS; k++) {
+          colors[k * 2] = pixel(pal.inks[k], pal.bg, 0);
+          colors[k * 2 + 1] = pixel(pal.inks[k], pal.bg, 0.8 * focus);
+        }
+        colorsFor = { pal, focus };
+      }
       const total = gw * gh;
+      const faded = focus > 0;
       for (let i = 0; i < total; i++) {
         const v = grid[i];
-        if (!v) continue;
-        const b = (v - 1) * 2 + (focus > 0 && gpart[i] !== focusPart ? 1 : 0);
-        buckets[b][counts[b]++] = i;
+        px32[i] = v ? colors[(v - 1) * 2 + (faded && gpart[i] !== focusPart ? 1 : 0)] : 0;
       }
+      pctx!.putImageData(img, 0, 0);
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, cv!.width, cv!.height);
+      ctx.imageSmoothingEnabled = false;
+      const step = cell * dpr;
+      ctx.drawImage(pix, 0, 0, gw * step, gh * step);
+      if (hairlines) {
+        ctx.globalCompositeOperation = "destination-out";
+        ctx.fillStyle = hairlines;
+        ctx.fillRect(0, 0, cv!.width, cv!.height);
+        ctx.globalCompositeOperation = "source-over";
+      }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const size = cell - 1 / dpr;
-      for (let b = 0; b < INKS * 2; b++) {
-        const c = counts[b];
-        if (!c) continue;
-        const ink = pal.inks[b >> 1];
-        ctx.fillStyle = b & 1 ? fade(ink, pal.bg, 0.8 * focus) : ink;
-        ctx.beginPath();
-        const list = buckets[b];
-        for (let k = 0; k < c; k++) {
-          const i = list[k];
-          ctx.rect((i % gw) * cell, Math.floor(i / gw) * cell, size, size);
-        }
-        ctx.fill();
-      }
 
       const paper = `rgb(${pal.bg.join(" ")})`;
       /** Dotted pixels from a marker out to a label's first line, with one bend. */
@@ -657,14 +926,15 @@ export function MoneyTree({ data }: { data: LandingData }) {
       }
 
       // Notes on the water. Where the drop went in, while the ripples spread; then each loop, from a
-      // marker on it that fills as its koi swims past.
-      const closed = narrow ? 1 - smooth(WATER.close - 0.04, WATER.close, w) : 1;
+      // marker on it that fills as its koi swims past. On the way down the river they go up and away
+      // with the pond, fading before they reach the header.
+      const away = (y: number) => (narrow ? 1 - smooth(0, vh * 0.12, u) : descent > 0 ? smooth(64, 140, y) : 1);
       const notes = NOTES.map((note, i) => {
         const el = noteEls.current[note.key];
         const vis =
           i === 0
             ? smooth(WATER.forecast[0], WATER.forecast[0] + 0.02, w) * (1 - smooth(WATER.forecast[1] - 0.03, WATER.forecast[1], w))
-            : smooth(WATER.notes[i - 1], WATER.notes[i - 1] + 0.02, w) * closed;
+            : smooth(WATER.notes[i - 1], WATER.notes[i - 1] + 0.02, w);
         let ax = surface.x;
         let ay = surface.y;
         let edge = ax + 14;
@@ -689,6 +959,7 @@ export function MoneyTree({ data }: { data: LandingData }) {
       }
       for (const n of notes) {
         if (!n.el) continue;
+        n.vis *= away(n.top);
         n.el.style.opacity = String(n.vis * dim(n.note.part));
         n.el.style.transform = `translate(${Math.round(n.left && !narrow ? n.edge - W : n.edge)}px, ${Math.round(n.top)}px)`;
         n.el.style.pointerEvents = n.vis > 0.6 ? "auto" : "none";
@@ -700,13 +971,62 @@ export function MoneyTree({ data }: { data: LandingData }) {
         const cy = Math.floor(n.ay / cell);
         leader(cx, cy, Math.floor((n.left ? n.edge + 6 : n.edge - 6) / cell), Math.floor((n.top + 9) / cell), n.left, color);
         let passing = false;
-        if (k === 0 || k === 1) {
-          const off = (((headAngle(loops[k], t) - (k === 0 ? Math.PI : 0)) % (Math.PI * 2)) + Math.PI * 3) % (Math.PI * 2) - Math.PI;
+        if (k === 0 || (k === 1 && !journey)) {
+          const off = (((headAngle(loopNow(k), t) - (k === 0 ? Math.PI : 0)) % (Math.PI * 2)) + Math.PI * 3) % (Math.PI * 2) - Math.PI;
           passing = Math.abs(off) < 0.16;
         }
         marker(cx, cy, color, passing || (focus > 0.5 && n.note.part === focusPart));
       }
       ctx.globalAlpha = 1;
+
+      // The rocks' troubles, each beside its rock, from a marker that fills once the koi is past. On a
+      // phone, the next one the koi comes to sits at the bottom of the screen.
+      if (river) {
+        const r0 = river;
+        const placedRocks = r0.rocks.map((rock, i) => {
+          const el = rockEls.current[i];
+          const a = rock.side > 0 ? -0.7 : -Math.PI + 0.7;
+          const e = rockEdge(rock, a) + cell * 3;
+          const ax = sx(rock.x + Math.cos(a) * e);
+          const ay = sy(rock.y + Math.sin(a) * e * 0.86);
+          const right = rock.side > 0;
+          // Clear of the bank all the way down the label, and of the screen's edge and the rail.
+          const width = el?.offsetWidth ?? W;
+          const bankAt = (y: number) => sx(centre(r0, (y - surface.y) / surface.tilt) + (right ? 1 : -1) * r0.half);
+          const bank = right ? Math.max(bankAt(ay - 9), bankAt(ay + 40)) : Math.min(bankAt(ay - 9), bankAt(ay + 40));
+          let edge = right ? Math.min(vw - 72 - width, Math.max(ax + 24, bank + 28)) : Math.max(16 + width, Math.min(ax - 24, bank - 28));
+          let top = ay - 9;
+          let vis = journey ? smooth(vh * 0.97, vh * 0.84, ay) * smooth(84, 150, ay) : 0;
+          const passed = headY > rock.y + rock.r * 0.2;
+          if (narrow) {
+            // The rock nearest the koi, switching halfway between two.
+            let near = 0;
+            r0.rocks.forEach((q, j) => {
+              if (Math.abs(q.y - headY) < Math.abs(r0.rocks[near].y - headY)) near = j;
+            });
+            vis = journey && i === near ? smooth(vh * 1.1, vh * 0.8, ay) * (1 - smooth(r0.bottom - r0.view * 0.1, r0.bottom + r0.view * 0.1, headY)) : 0;
+            edge = 16;
+            top = vh - (el?.offsetHeight ?? 40) - 28;
+          }
+          return { el, rock, i, ax, ay, edge, top, vis, right, passed, width };
+        });
+        for (const p of placedRocks) {
+          if (!p.el) continue;
+          const part = POND.rock(p.i);
+          p.el.style.opacity = String(p.vis * dim(part));
+          p.el.style.transform = `translate(${Math.round(!p.right && !narrow ? p.edge - p.width : p.edge)}px, ${Math.round(p.top)}px)`;
+          p.el.style.pointerEvents = p.vis > 0.6 ? "auto" : "none";
+          const shown = journey ? smooth(vh * 1.05, vh * 0.86, p.ay) * smooth(70, 130, p.ay) : 0;
+          if (shown <= 0.001) continue;
+          ctx.globalAlpha = shown * dim(part);
+          const color = pal.inks[INK.fruit];
+          const cx = Math.floor(p.ax / cell);
+          const cy = Math.floor(p.ay / cell);
+          if (p.vis > 0.001) leader(cx, cy, Math.floor((p.right ? p.edge - 6 : p.edge + 6) / cell), Math.floor((p.top + 9) / cell), !p.right, color);
+          marker(cx, cy, color, p.passed || (focus > 0.5 && part === focusPart));
+        }
+        ctx.globalAlpha = 1;
+      }
 
       if (status.current && found.current) {
         const f = format(cents);
@@ -728,7 +1048,10 @@ export function MoneyTree({ data }: { data: LandingData }) {
         el.style.visibility = on <= 0 ? "hidden" : "visible";
       };
       show(yieldRef.current, smooth(CLOCK.yield, CLOCK.yield + 0.05, g) * (1 - smooth(0, 0.05, w)));
-      show(closing.current, smooth(WATER.close, WATER.close + 0.05, w));
+      // The closing words in the clearing the pond leaves for them, then the links along the bottom.
+      show(closing.current, smooth(0.62, 0.8, bloom));
+      if (closing.current && garden) closing.current.style.top = `${Math.round(sy(garden.clearing.y))}px`;
+      show(foot.current, smooth(0.72, 0.9, bloom));
       if (rail.current) {
         const els = rail.current.children;
         const at = travel();
@@ -764,13 +1087,30 @@ export function MoneyTree({ data }: { data: LandingData }) {
       grid = new Uint8Array(gw * gh);
       gpart = new Uint8Array(gw * gh);
       gprio = new Uint8Array(gw * gh);
-      buckets = Array.from({ length: INKS * 2 }, () => new Int32Array(gw * gh));
+      pix.width = gw;
+      pix.height = gh;
+      img = pctx!.createImageData(gw, gh);
+      px32 = new Uint32Array(img.data.buffer);
+      // The tile spans as few pixels as come to a whole number of device pixels, or the whole canvas.
+      const step = cell * dpr;
+      let span = 1;
+      while (span < 16 && Math.abs(span * step - Math.round(span * step)) > 0.01) span++;
+      tile.width = span < 16 ? Math.round(span * step) : cv!.width;
+      tile.height = span < 16 ? Math.round(span * step) : cv!.height;
+      const tctx = tile.getContext("2d");
+      for (let j = 1; tctx && Math.round(j * step) <= Math.max(tile.width, tile.height); j++) {
+        tctx.fillRect(Math.round(j * step) - 1, 0, 1, tile.height);
+        tctx.fillRect(0, Math.round(j * step) - 1, tile.width, 1);
+      }
+      hairlines = ctx!.createPattern(tile, "repeat");
       for (const el of [...Object.values(nodeEls.current), ...Object.values(noteEls.current)]) {
         if (!el) continue;
         el.style.width = `${W}px`;
         // Phone labels swap in and out by chapter, so they cross-fade.
         el.style.transition = vw < 640 ? "opacity 250ms" : "";
       }
+      // The rocks' labels take the width they need, on a wide screen up to a little more than the others'.
+      for (const el of rockEls.current) if (el) el.style.maxWidth = `${vw < 1100 ? W : W + 48}px`;
       if (opened) opened.twigs = null;
 
       // The water. The drop forms where the tree stood and is sized to the screen; the koi's loops
@@ -792,6 +1132,42 @@ export function MoneyTree({ data }: { data: LandingData }) {
         { r, squash, lap: 28, phase: 3.4, lumps: [2.6, 0.4] },
       ];
       lens = [r * 0.48, r * 0.82];
+
+      // Below the pond, the river, and the pond at its end. The camera stops with that pond filling
+      // the screen, and on the way down holds the koi's snout about halfway down it.
+      const view = vh / flat;
+      river = layRiver({ width: vw, view, narrow, from: (vh - pondY) / flat, koi: lens[1] });
+      const mouthX = centre(river, river.bottom);
+      garden = layGarden({ width: vw, view, top: river.bottom - view * 0.1, mouthX, mouthY: river.bottom, open: river.open, half: river.half, narrow, cell, koi: lens[1] });
+      riverPath = riverWay(river, lens[1] * 0.3 + 14, garden.path);
+      bottomDescent = garden.top + pondY / flat;
+      hold = ((narrow ? 0.46 : 0.48) * vh - pondY) / flat;
+      // The banks as dots a few pixels apart along each, with a pebble on the land side now and then.
+      const along: number[] = [];
+      pebbles = [];
+      for (const side of [0, 1]) {
+        let walked = 0;
+        let px = NaN;
+        let py = NaN;
+        let n = 0;
+        for (let y = river.funnel; y <= river.open; y += 1) {
+          const b = banks(river, y);
+          if (!b) continue;
+          const x = b[side];
+          if (!Number.isNaN(px)) walked += Math.hypot(x - px, y - py);
+          [px, py] = [x, y];
+          if (walked < cell * 3) continue;
+          walked = 0;
+          along.push(x, y);
+          if (++n % 9 === 0 && hash2(n, side) < 0.7) {
+            const out = (side ? 1 : -1) * cell * (2 + Math.floor(hash2(n, 7) * 4));
+            pebbles.push({ x: x + out, y, ink: hash2(n, 9) < 0.5 ? INK.bark : INK.dust });
+            if (hash2(n, 11) < 0.5) pebbles.push({ x: x + out + cell, y: y + cell * 0.8, ink: INK.dust });
+          }
+        }
+      }
+      bankDots = Float32Array.from(along);
+      if (journey) setOff(journey.angle);
 
       // Where each tree dot goes in the drop, and the ink of the pixel it lands on.
       const n = tree.dots.length;
@@ -927,6 +1303,8 @@ export function MoneyTree({ data }: { data: LandingData }) {
     { at: reachAt(CLOCK.limbs[0]), name: "Findings" },
     { at: reachAt(CLOCK.yield), name: "Yield" },
     { at: TREE_VH + HOLD_VH + WATER.notes[0] * WATER_VH, name: "Loops" },
+    { at: RIVER_AT + 60, name: "River" },
+    { at: TRAVEL_VH, name: "Pond" },
   ];
 
   return (
@@ -1012,6 +1390,19 @@ export function MoneyTree({ data }: { data: LandingData }) {
           </div>
         ))}
 
+        {ROCKS.map((rock, i) => (
+          <div
+            key={rock.key}
+            ref={(e) => void (rockEls.current[i] = e)}
+            onPointerEnter={(e) => e.pointerType === "mouse" && ctl.current.hover(rock.key, POND.rock(i))}
+            onPointerLeave={() => ctl.current.hover("", -1)}
+            className={cn("halo pointer-events-none absolute left-0 top-0 opacity-0 will-change-transform", i % 2 === 1 && "sm:text-right")}
+          >
+            <span className="block text-[13px] font-medium leading-[18px] sm:text-[14px]">{rock.name}</span>
+            <span className="block text-[11.5px] leading-snug text-faint sm:text-[12.5px]">{rock.sub}</span>
+          </div>
+        ))}
+
         <p ref={status} className="pointer-events-none absolute bottom-5 left-4 font-mono text-[11px] text-faint tabular opacity-0 sm:left-8">
           <span ref={found} className="text-found">
             $0
@@ -1030,16 +1421,29 @@ export function MoneyTree({ data }: { data: LandingData }) {
           <Actions />
         </div>
 
-        <div
-          ref={closing}
-          className="invisible absolute inset-x-0 bottom-0 flex flex-wrap items-end justify-between gap-5 px-4 pb-8 opacity-0 sm:px-10 sm:pb-12"
-        >
-          <p className="display text-[clamp(1.6rem,3.6vw,2.8rem)] leading-[1.02]">
+        <div ref={closing} className="invisible absolute inset-x-0 top-1/2 flex -translate-y-1/2 flex-col items-center gap-6 px-4 text-center opacity-0">
+          <p className="halo display text-[clamp(1.9rem,4.4vw,3.4rem)] leading-[1.02]">
             You run the business.
-            <span className="block text-faint">It watches the money.</span>
+            <span className="block text-muted-foreground">It watches the money.</span>
           </p>
           <Actions />
         </div>
+
+        <footer
+          ref={foot}
+          className="halo invisible absolute inset-x-0 bottom-0 flex flex-wrap gap-x-6 gap-y-1 px-4 pb-4 font-mono text-[11px] text-muted-foreground opacity-0 sm:px-8 sm:pb-5"
+        >
+          <Link href="/overview" className="hover:text-foreground">
+            Overview
+          </Link>
+          <Link href="/activity" className="hover:text-foreground">
+            Audit log
+          </Link>
+          <a href="https://github.com/aiden-guan/ledger" className="hover:text-foreground">
+            Source
+          </a>
+          <span className="sm:ml-auto">Demo data. Acme Outdoor Co. is fictional.</span>
+        </footer>
 
         <ol ref={rail} className="absolute right-4 top-1/2 hidden -translate-y-1/2 flex-col gap-3 sm:flex sm:right-8">
           {chapters.map((c, i) => (

@@ -1,4 +1,3 @@
-import { LandingFooter } from "@/components/landing/landing-footer";
 import { LandingNav } from "@/components/landing/landing-nav";
 import { MoneyTree } from "@/components/landing/money-tree";
 import { getLandingData } from "@/lib/landing/data";
@@ -14,7 +13,6 @@ export default async function LandingPage() {
       <main>
         <MoneyTree data={data} />
       </main>
-      <LandingFooter />
     </>
   );
 }

@@ -225,7 +225,7 @@ That pushes the Convex functions and builds Next.js against the production deplo
 
 With `DEMO_MODE=true` (on the Convex deployment) the header shows **Reset demo** and the demo seed and reset functions run. With it off, they refuse with FORBIDDEN and the button is hidden. The suggested demo:
 
-1. Open the landing page and scroll: the tree grows from Acme Outdoor Co.'s books to its findings. Click a finding to grow twigs out to its evidence. Keep scrolling: the tree condenses into a drop that falls into still water, and two koi come up to swim the two loops described below. Then click **Open the demo**.
+1. Open the landing page and scroll: the tree grows from Acme Outdoor Co.'s books to its findings. Click a finding to grow twigs out to its evidence. Keep scrolling: the tree condenses into a drop that falls into still water, and two koi come up to swim the two loops described below. Keep going and the orange koi swims off down a river, around five rocks, each a problem LedgerLens handles, to a pond in bloom at the bottom of the page. Then click **Open the demo**.
 2. **Books.** The overview fills in with every record of the last six months, one square each. Above the field, one line shows the parts of the system: the data, the rules, Apify, Claude and you. A part lights while it works and says what it is doing, and a square travels between two parts whenever data passes; a part that has no role in a beat says so. Press → to move between beats (or click them on the left); ↵ always does the beat's one thing.
 3. **Investigate.** Press ↵. A scan line sweeps the books as the engine works through its ten steps, records it suspects turn pale orange, and each leak lights up in orange as it is measured, with its label and amount. The engine trace below logs each step as it happens: the part that ran it, the threshold it tested (read from the rules' own config), what it found and how long it took. On the live deployment Claude plans the market research and explains the findings, and Apify fetches the competitor prices in between.
 4. **Decide.** One fix at a time. The field zooms to the records behind it (the bottle's sales under the supplier's cost step, the two identical Summit payments, the daypack's price against three competitors, the Relay Inbox charges), with the drafted email or price change below and the arithmetic behind the amount beside it, line by line as the engine computed it. Press ↵ to approve: the records turn blue and the forecast picks up the fix. → moves to the next fix.
@@ -261,6 +261,12 @@ The landing page, fully grown. The roots are the demo company's books, the trunk
 
 ![Landing page, past the tree](docs/screenshots/landing-pond.png)
 
+Then the orange koi leaves its loop and swims down a river. Each rock is a problem a small business runs into and LedgerLens handles: fake invoices, paying twice, rising costs, underpricing, and questions about the books. The river ends in a pond that blooms as the koi swims in, and the page ends there:
+
+![Landing page, the river](docs/screenshots/landing-river.png)
+
+![Landing page, the pond at the end](docs/screenshots/landing-end.png)
+
 The overview after an investigation: 1,187 records, four leaks lit up in orange, each label pointing at the record it was measured from, and the engine's trace of the run. These are from the offline replay, which runs on the rules-based narrative and the demo price dataset, so the Apify and Claude parts show as unused; on the live deployment they light up in their steps:
 
 ![Overview, investigate](docs/screenshots/overview-investigate.png)
@@ -281,6 +287,6 @@ On a phone:
 
 ![Mobile](docs/screenshots/mobile.png)
 
-The look is a field notebook: warm paper, black ink, hairline rules, and two pigments. Blue is the books; orange is money the engine found. Type is Geist, with anything measured set in Geist Mono. The landing tree is generated from a fixed seed (`lib/landing/tree.ts`) and drawn on a pixel grid on a canvas, one frame per scroll position; the drop, ripples and koi that follow it (`lib/landing/pond.ts`) are drawn on the same grid. The overview's field is drawn on a canvas too: each square eases to its color on its own clock, so a finding spreads through its records from the one its label points at, and the amount scale glides when a fix is brought into focus. Every figure on the landing page comes from running the engine over the demo books at build time (`lib/landing/data.ts`). The site follows the system light or dark setting and respects reduced motion.
+The look is a field notebook: warm paper, black ink, hairline rules, and two pigments. Blue is the books; orange is money the engine found. Type is Geist, with anything measured set in Geist Mono. The landing tree is generated from a fixed seed (`lib/landing/tree.ts`) and drawn on a pixel grid on a canvas, one frame per scroll position; the drop, ripples and koi that follow it (`lib/landing/pond.ts`), the river (`lib/landing/river.ts`) and the pond at the end (`lib/landing/garden.ts`) are drawn on the same grid, which goes to the screen as one small image scaled up. The overview's field is drawn on a canvas too: each square eases to its color on its own clock, so a finding spreads through its records from the one its label points at, and the amount scale glides when a fix is brought into focus. Every figure on the landing page comes from running the engine over the demo books at build time (`lib/landing/data.ts`). The site follows the system light or dark setting and respects reduced motion.
 
 In development, `/preview/overview`, `/preview/findings/0` and `/preview/activity` render the app views from an in-memory engine run, without a Convex deployment (`?approved=1` on a finding shows the approved state). These routes return 404 in production.

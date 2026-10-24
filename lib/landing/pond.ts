@@ -23,7 +23,8 @@ export const WATER = {
     [0.47, 0.58],
   ],
   notes: [0.52, 0.6],
-  close: 0.78,
+  /** The slow loop's koi sets off down the river. */
+  leave: 0.72,
 } as const;
 
 /** A stable random number in [0, 1) for a pair of integers. */
@@ -202,8 +203,8 @@ export interface KoiDot {
   h: number;
 }
 
-/** The fast loop's koi is mostly the books' blue; the slow loop's is mostly money-found orange. */
-export type KoiKind = "fast" | "slow";
+/** The fast loop's koi is mostly the books' blue; the slow loop's is mostly money-found orange. The pond at the end has a gold one too. */
+export type KoiKind = "fast" | "slow" | "gold";
 
 /** Where the tail ends, as a share of length from the snout. */
 export const TAIL = 1.1;
@@ -229,6 +230,13 @@ export const FINS = [
 /** A fin's half-width at a, 0 to 1 along it, as a share of its width: narrow at the root, then a rounded paddle. */
 export const finHalf = (a: number) => Math.min(1, 1.25 * Math.sqrt(a)) * Math.sqrt(Math.max(0, 1 - a ** 4));
 
+/** Each kind's body colour, its pale rim, and the colour its tail and fins are flecked with. */
+const COATS: Record<KoiKind, [Ink, Ink, Ink]> = {
+  fast: [INK.moss, INK.mossLight, INK.fruitPale],
+  slow: [INK.fruit, INK.fruitPale, INK.mossLight],
+  gold: [INK.gold, INK.fruitPale, INK.fruit],
+};
+
 export function koiDots(kind: KoiKind, seed: number): KoiDot[] {
   const rnd = mulberry32(seed);
   const dots: KoiDot[] = [];
@@ -236,9 +244,7 @@ export function koiDots(kind: KoiKind, seed: number): KoiDot[] {
   const [p1, p2, p3] = [rnd() * 9, rnd() * 9, rnd() * 9];
   // Patches of the other colour: a slow field over the body decides where.
   const patch = (s: number, o: number) => Math.sin(s * 11 + p1) * Math.sin(o * 30 + s * 5 + p2) + 0.5 * Math.sin(s * 23 - o * 19 + p3);
-  const main = blue ? INK.moss : INK.fruit;
-  const pale = blue ? INK.mossLight : INK.fruitPale;
-  const other = blue ? INK.fruitPale : INK.mossLight;
+  const [main, pale, other] = COATS[kind];
 
   // The body, on a jittered lattice so it fills without holes at any size the page draws it.
   const STEP = 0.009;
@@ -255,7 +261,7 @@ export function koiDots(kind: KoiKind, seed: number): KoiDot[] {
       // The ridge along the back and the eyes are ink-blue on both.
       if (Math.abs(dd) < 0.013 && ds > 0.3 && ds < 0.7) [ink, z] = [INK.navy, 9];
       else if (Math.hypot(ds - 0.07, Math.abs(dd) - 0.062) < 0.016) [ink, z] = [INK.navy, 9];
-      else if (patch(ds, dd) > 0.55) [ink, z] = [blue ? (h < 0.7 ? INK.fruit : INK.fruitPale) : h < 0.7 ? INK.moss : INK.navy, 7];
+      else if (patch(ds, dd) > 0.55) [ink, z] = [blue ? (h < 0.7 ? INK.fruit : INK.fruitPale) : kind === "gold" ? (h < 0.7 ? INK.fruit : INK.rust) : h < 0.7 ? INK.moss : INK.navy, 7];
       else if (e > 0.8) [ink, z] = [pale, 5];
       dots.push({ s: ds, o: dd, ink, fin: 0, z, h: rnd() });
     }
@@ -336,10 +342,44 @@ export function swim(loop: Loop, len: number, beat: number, t: number, out = new
     out[i * 4] = x;
     out[i * 4 + 1] = y;
   }
+  return undulate(out, len, beat, t);
+}
+
+/**
+ * A koi's spine along a path instead of a loop: `xy` is the path as x, y pairs and `at` the arc
+ * length to each point, and the snout is `head` along it. The path has to reach at least the
+ * koi's length behind the snout. `calm` scales the swimming wave, for a koi at rest.
+ */
+export function follow(xy: Float64Array, at: Float64Array, head: number, len: number, beat: number, t: number, calm = 1, out = new Float64Array(SPINE * 4)) {
+  let j = Math.max(0, Math.min(at.length - 2, search(at, head)));
+  for (let i = 0; i < SPINE; i++) {
+    const want = Math.max(0, head - (i / (SPINE - 1)) * TAIL * len);
+    while (j > 0 && at[j] > want) j--;
+    const v = Math.max(0, Math.min(1, (want - at[j]) / Math.max(1e-9, at[j + 1] - at[j])));
+    out[i * 4] = xy[j * 2] + (xy[j * 2 + 2] - xy[j * 2]) * v;
+    out[i * 4 + 1] = xy[j * 2 + 1] + (xy[j * 2 + 3] - xy[j * 2 + 1]) * v;
+  }
+  return undulate(out, len, beat, t, calm);
+}
+
+/** The last index whose value is at most v, in an ascending array. */
+export function search(a: ArrayLike<number>, v: number) {
+  let lo = 0;
+  let hi = a.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (a[mid] <= v) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo;
+}
+
+/** The swimming wave, growing toward the tail, laid over a spine along its normals. */
+function undulate(out: Float64Array, len: number, beat: number, t: number, calm = 1) {
   normals(out);
   for (let i = 0; i < SPINE; i++) {
     const s = (i / (SPINE - 1)) * TAIL;
-    const wave = len * (0.008 + 0.055 * s * s) * Math.sin(Math.PI * 2 * (beat * t - s / 0.95));
+    const wave = calm * len * (0.008 + 0.055 * s * s) * Math.sin(Math.PI * 2 * (beat * t - s / 0.95));
     out[i * 4] += out[i * 4 + 2] * wave;
     out[i * 4 + 1] += out[i * 4 + 3] * wave;
   }
@@ -359,5 +399,5 @@ function normals(p: Float64Array) {
   }
 }
 
-/** Focus groups for the water, after the tree's parts (0-9): each koi with its loop, then the water itself. */
-export const POND = { koi: (i: number) => 10 + i, water: 12 } as const;
+/** Focus groups for the water, after the tree's parts (0-9): each koi with its loop, the water itself, each rock in the river, then the pond at the end. */
+export const POND = { koi: (i: number) => 10 + i, water: 12, rock: (i: number) => 13 + i, garden: 18 } as const;
