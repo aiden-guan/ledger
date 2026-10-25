@@ -91,7 +91,8 @@ export default defineSchema({
     captureMode: v.union(v.literal("live"), v.literal("fixture")),
     apifyRunId: v.union(v.string(), v.null()),
     rawPayload: v.any(),
-  }).index("by_org", ["organizationId"]),
+  }).index("by_org", ["organizationId"])
+    .index("by_investigation", ["investigationId", "capturedAt"]),
 
   investigations: defineTable({
     organizationId: v.id("organizations"),
@@ -103,9 +104,12 @@ export default defineSchema({
     totalRecoveryAnnualCents: v.number(),
     errorMessage: v.union(v.string(), v.null()),
     metadata: v.any(),
+    marketProfile: v.optional(v.literal("retail")),
   })
     .index("by_org", ["organizationId", "startedAt"])
-    .index("by_org_status", ["organizationId", "status"]),
+    .index("by_org_status", ["organizationId", "status"])
+    .index("by_org_market", ["organizationId", "marketProfile", "startedAt"])
+    .index("by_org_market_status", ["organizationId", "marketProfile", "status", "startedAt"]),
 
   investigationEvents: defineTable({
     investigationId: v.id("investigations"),

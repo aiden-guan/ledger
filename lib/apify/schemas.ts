@@ -8,6 +8,7 @@ export const ActorInputSchema = z.object({
         internalProductId: z.string().min(1),
         competitor: z.string().min(1),
         url: z.string().url(),
+        expectedNameTokens: z.array(z.string().min(1).max(40)).max(6).optional(),
       }),
     )
     .min(1)

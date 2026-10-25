@@ -20,6 +20,7 @@ export interface ListingRequest {
   competitorId: string;
   competitorName: string;
   url: string;
+  expectedNameTokens?: string[];
 }
 
 export interface NormalizedObservation extends PriceObservation {
@@ -39,6 +40,8 @@ export interface CompetitorPricingResult {
   fallbackReason: string | null;
   listingsRequested: number;
   durationMs: number;
+  datasetId?: string;
+  actorId?: string;
 }
 
 export interface CompetitorPricingOptions {
@@ -47,6 +50,8 @@ export interface CompetitorPricingOptions {
   actorId?: string;
   timeoutMs: number;
   pollIntervalMs?: number;
+  /** Retail checks must never substitute invented prices for failed web requests. */
+  allowFixtureFallback?: boolean;
   onProgress?: (update: { status: ActorRunStatus | "FIXTURE"; message: string; runId?: string }) => Promise<void> | void;
 }
 
@@ -91,7 +96,7 @@ export function normalizeExternalPrices(
 
 export function buildActorInput(listings: ListingRequest[]): ActorInput {
   return ActorInputSchema.parse({
-    products: listings.map((l) => ({ internalProductId: l.productId, competitor: l.competitorName, url: l.url })),
+    products: listings.map((l) => ({ internalProductId: l.productId, competitor: l.competitorName, url: l.url, ...(l.expectedNameTokens ? { expectedNameTokens: l.expectedNameTokens } : {}) })),
   });
 }
 
@@ -141,6 +146,9 @@ export async function getCompetitorPricing(
 
   const fallback = async (reason: string) => {
     logger.warn("apify_fallback", { reason });
+    if (options.allowFixtureFallback === false) {
+      throw new Error(`Live market check unavailable: ${reason}`);
+    }
     await options.onProgress?.({ status: "FIXTURE", message: `Live market data unavailable (${reason}). Using labeled demo dataset.` });
     return fixtureResult(listings, "live", warnings, reason, started);
   };
@@ -197,6 +205,8 @@ export async function getCompetitorPricing(
     }
     return {
       mode: "live",
+      datasetId: current.defaultDatasetId,
+      actorId: options.actorId,
       requestedMode: "live",
       runId: current.id,
       observations,

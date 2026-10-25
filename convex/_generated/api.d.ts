@@ -18,6 +18,7 @@ import type * as engine from "../engine.js";
 import type * as field from "../field.js";
 import type * as findings from "../findings.js";
 import type * as investigations from "../investigations.js";
+import type * as market from "../market.js";
 import type * as model from "../model.js";
 import type * as recommendations from "../recommendations.js";
 import type * as system from "../system.js";
@@ -41,6 +42,7 @@ import type * as watch from "../watch.js";
 "field": typeof field,
 "findings": typeof findings,
 "investigations": typeof investigations,
+"market": typeof market,
 "model": typeof model,
 "recommendations": typeof recommendations,
 "system": typeof system,

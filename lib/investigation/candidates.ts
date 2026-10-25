@@ -518,7 +518,7 @@ export function buildPricingCandidate(product: { id: string; sku: string; name: 
   const action = {
     actionType: "CHANGE_PRICE" as const,
     title: `Raise price from ${fmtPrice(opp.currentPriceCents)} → ${fmtPrice(opp.recommendedPriceCents)}`,
-    description: `Test a ${fmtPrice(opp.recommendedPriceCents)} price for ${product.name} and watch conversion for two weeks. The new price remains below every observed competitor.`,
+    description: `Test a ${fmtPrice(opp.recommendedPriceCents)} price for ${product.name} and watch conversion for two weeks. The new price remains below the observed market median.`,
   };
 
   return {
@@ -550,7 +550,7 @@ export function buildPricingCandidate(product: { id: string; sku: string; name: 
       {
         title: `Pricing opportunity on ${product.name}`,
         summary: `${product.name} sells at ${fmtPrice(opp.currentPriceCents)}, ${pct(opp.percentBelowMedian)} below the competitor median of ${fmtPrice(opp.stats.medianCents)}.`,
-        explanation: `${opp.stats.count} competing retailers list comparable products between ${fmtPrice(opp.stats.minCents)} and ${fmtPrice(opp.stats.maxCents)}. Acme's ${fmtPrice(opp.currentPriceCents)} price is the lowest observed. Raising it to ${fmtPrice(opp.recommendedPriceCents)} would still undercut every competitor and adds about ${fmtPrice(opp.monthlyUpsideCents)} a month at the current sales pace.`,
+        explanation: `${opp.stats.count} competing retailers list comparable products between ${fmtPrice(opp.stats.minCents)} and ${fmtPrice(opp.stats.maxCents)}. Acme's ${fmtPrice(opp.currentPriceCents)} price is below the observed median. Testing ${fmtPrice(opp.recommendedPriceCents)} would remain below that median and could add about ${fmtPrice(opp.monthlyUpsideCents)} a month if unit sales hold.`,
         rationale: "Market evidence suggests you have room to raise price. The recommendation stays at or below 90% of the median and caps the increase at 15%.",
         uncertainty: [
           "Assumes unit sales hold at the historical pace; demand elasticity is not measured.",

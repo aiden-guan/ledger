@@ -94,6 +94,18 @@ The AI output is constrained:
 
 ## How Apify is used
 
+**Open `/market-check` for the real-data demo.** This runs the private `aidengrails/ledgerlens-competitor-pricing` Actor (`r1XmOWedMNF9AKMbr`) against curated Gregory Nano 24 product pages at Quest Outdoors, Al's Sporting Goods and Gregory. The page shows the actual captured quotes, stock status, capture time, coverage, extraction method, changes since the previous capture, and links to the Apify run and dataset. The Actor checks expected product-name tokens, handles ProductGroup variants, and records failed pages instead of inventing prices.
+
+The same finance engine turns usable observations into a prepared price test. **Preview this price** shows only that test's projected effect on the money river; **Review the prepared price change** opens its evidence, calculations and approval step. Changing a proposed price requires fresh approval. Acme's daypack is a comparable sample product, not the identical SKU, and the projection assumes unit sales hold. This flow always requests live data and never substitutes fixtures. Failed refreshes preserve the previous capture with its original timestamp. Refreshes are coalesced while running and limited to one start per minute.
+
+See [the sponsor submission and opening demo script](docs/apify-submission.md) and [the standalone Actor documentation](apify/ledgerlens-competitor-pricing/README.md). The Actor may remain private; share its ID with the judges. The separate “Best Actor built with AI Chat” eligibility has not been established.
+
+[Open the public market-check demo](https://ledgerlens-mu.vercel.app/market-check).
+
+![Real retailer evidence and a prepared price test](docs/screenshots/apify-market-check.png)
+
+![Projected profit from the price test](docs/screenshots/apify-profit-preview.png)
+
 During `GATHERING_EXTERNAL_EVIDENCE`, LedgerLens selects products with margin erosion or a pricing gap, builds an input of competitor product URLs, and runs the `ledgerlens-competitor-pricing` Actor:
 
 1. Every URL passes an SSRF guard in the app (`lib/utils/url-safety.ts`) before it is sent, and again inside the Actor with a DNS check, including after redirects.
@@ -101,7 +113,7 @@ During `GATHERING_EXTERNAL_EVIDENCE`, LedgerLens selects products with margin er
 3. Each record is validated with Zod and normalized to cents. Records without a trustworthy price are dropped; the Actor writes them to a `FAILURES` key-value record instead of guessing.
 4. Observations are stored with source URL, capture time, Apify run ID, raw payload and `capture_mode = live`.
 
-The Actor extracts prices from JSON-LD, then meta tags, then microdata, then common selectors.
+The Actor extracts prices from JSON-LD (including ProductGroup variants), then meta tags, then microdata, then individual price selectors. Currency must be identifiable; combined sale/list prices are rejected. `FAILURES` and `SUMMARY` in the run's key-value store explain extraction coverage. The SDK is installed as a Node external dependency in `convex.json` so its runtime dependencies work on Convex.
 
 If the token is missing, the run fails, times out, or returns no usable prices, LedgerLens falls back to the fixture dataset, records a warning on the investigation, and labels the evidence "Demo dataset, not live market data". It never presents fixture data as live.
 
@@ -243,7 +255,7 @@ To record the walkthrough in one take, press p (or open `/overview?tour`): the o
 - LedgerLens does not execute financial actions. Approval produces a checklist and marks the recommendation Ready for execution.
 - Pricing recommendations assume unit sales hold at the new price; price elasticity is not modelled, and each finding says so in its uncertainty section.
 - Investigations run as a Convex action, which has a 10-minute limit. A run that outlives it is marked FAILED on the next start and previous findings stay visible.
-- The seeded listings target the bundled sandbox storefront pages, so a live run demonstrates the crawl rather than real market prices. Pointing listings at real retailers needs comparable products chosen by hand and a check of each site's terms of service.
+- The standard investigation's seeded listings target the sandbox storefront pages. The separate `/market-check` flow uses real retailer pages and labels the sample business separately. Its curated pages may change, become unavailable or block crawls; partial coverage is shown, and no pricing test is produced without two usable quotes.
 
 ## Safety
 

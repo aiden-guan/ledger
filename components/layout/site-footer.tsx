@@ -13,7 +13,7 @@ export function SiteFooter() {
         <a href="https://github.com/aiden-guan/ledger" className="hover:text-foreground">
           Source
         </a>
-        <span className="ml-auto">Demo data. Acme Outdoor Co. is fictional.</span>
+        <span className="ml-auto">Acme Outdoor Co. is a sample business.</span>
       </div>
     </footer>
   );

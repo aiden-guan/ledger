@@ -1,6 +1,8 @@
 import { Badge } from "@/components/ui/badge";
 import type { FindingDetail } from "@/lib/views/findings";
 import { cn } from "@/lib/utils/cn";
+import { apifyRunUrl } from "@/lib/apify/retail-sources";
+import { formatDateTime } from "@/lib/ui/labels";
 
 type Evidence = FindingDetail["evidence"][number];
 
@@ -107,7 +109,8 @@ export function CompetitorCard({ evidence }: { evidence: Evidence }) {
   const d = evidence.display;
   if (!d || d.kind !== "competitor") return null;
   return (
-    <a href={d.url} target="_blank" rel="noopener noreferrer" className={cn(cell, "group block transition-colors hover:bg-muted")}>
+    <div className={cn(cell, "group transition-colors hover:bg-muted")}>
+      <a href={d.url} target="_blank" rel="noopener noreferrer" className="block hover:underline">
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm">{d.competitorName}</p>
         <span className="font-mono text-[12px] text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground">↗</span>
@@ -124,6 +127,9 @@ export function CompetitorCard({ evidence }: { evidence: Evidence }) {
         )}
         {d.availability && d.availability !== "unknown" && <Badge variant="outline">{d.availability.replace(/_/g, " ")}</Badge>}
       </div>
-    </a>
+      </a>
+      <p className="mt-3 font-mono text-[10px] text-muted-foreground">{formatDateTime(d.capturedAt)}</p>
+      {d.captureMode === "live" && d.runId && apifyRunUrl(d.runId) && <a href={apifyRunUrl(d.runId)!} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block font-mono text-[11px] text-signal hover:underline">Inspect Apify run ↗</a>}
+    </div>
   );
 }

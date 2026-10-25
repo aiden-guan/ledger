@@ -20,7 +20,7 @@ export function parsePrice(value) {
     if (/^\d{1,3}(\.\d{3})*,\d{2}$/.test(text)) text = text.replace(/\./g, '').replace(',', '.');
     else if (/^\d+,\d{2}$/.test(text)) text = text.replace(',', '.');
     else text = text.replace(/,/g, '');
-    const parsed = Number.parseFloat(text);
+    const parsed = Number(text);
     return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed * 100) / 100 : null;
 }
 
@@ -40,7 +40,8 @@ function flattenJsonLd(node) {
     if (Array.isArray(node)) return node.flatMap(flattenJsonLd);
     if (typeof node === 'object') {
         const obj = /** @type {Record<string, unknown>} */ (node);
-        return [obj, ...flattenJsonLd(obj['@graph'])];
+        const variants = Array.isArray(obj.hasVariant) ? obj.hasVariant.map((v) => ({ ...v, name: `${obj.name ?? ''} ${v.name ?? ''}`.trim() })) : [];
+        return [obj, ...flattenJsonLd(obj['@graph']), ...flattenJsonLd(obj.mainEntity), ...flattenJsonLd(variants)];
     }
     return [];
 }
@@ -113,11 +114,12 @@ function fromMicrodata($) {
 
 /** @param {cheerio.CheerioAPI} $ */
 function fromSelectors($) {
-    const selectors = ['[data-price]', '.product-price', '.price__current', '.price', '#price'];
+    const selectors = ['.sales .value[content]', '[itemprop="price"][content]', '[data-price]', '.price__current', '.product-price', '.price', '#price'];
     for (const selector of selectors) {
         const el = $(selector).first();
         if (!el.length) continue;
-        const rawText = el.attr('data-price') ?? el.text();
+        const attribute = el.attr('content') ?? el.attr('data-price');
+        const rawText = attribute && /^\d/.test(attribute) ? attribute : el.text();
         const price = parsePrice(rawText);
         if (!price) continue;
         const symbol = Object.keys(CURRENCY_SYMBOLS).find((s) => el.text().includes(s));
@@ -137,7 +139,7 @@ export function extractProduct(html) {
     if (!result) return { price: null, currency: null, availability: 'unknown', productName: fallbackName || null, method: null };
     return {
         ...result,
-        currency: (result.currency ?? 'USD').toUpperCase(),
+        currency: result.currency?.toUpperCase() ?? null,
         productName: result.productName || fallbackName || null,
     };
 }

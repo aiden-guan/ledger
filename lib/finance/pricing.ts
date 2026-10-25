@@ -70,7 +70,17 @@ export function calculatePricingOpportunity(
   unitsTrailing90Days: number,
   config: PricingConfig = DEFAULT_PRICING_CONFIG,
 ): PricingOpportunity | null {
-  const usable = observations.filter((o) => o.productId === productId && o.priceCents > 0);
+  // Every product in this ledger is denominated in USD. Foreign currency, stale quotes,
+  // unavailable listings and duplicate URLs cannot establish a pricing opportunity.
+  const latest = new Map<string, PriceObservation>();
+  const newestCapture = Math.max(0, ...observations.map((o) => o.capturedAt.getTime()));
+  for (const o of observations) {
+    if (o.productId !== productId || !Number.isSafeInteger(o.priceCents) || o.priceCents <= 0 || o.currency !== "USD" || o.availability === "out_of_stock") continue;
+    if (newestCapture - o.capturedAt.getTime() > 24 * 60 * 60 * 1000) continue;
+    const key = o.productUrl;
+    if (!latest.has(key) || latest.get(key)!.capturedAt < o.capturedAt) latest.set(key, o);
+  }
+  const usable = [...latest.values()];
   if (usable.length < config.minObservations) return null;
 
   const stats = competitorStats(usable.map((o) => o.priceCents));

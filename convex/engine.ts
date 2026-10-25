@@ -41,6 +41,16 @@ export const run = internalAction({
   },
 });
 
+export const runMarketCheck = internalAction({
+  args: { investigationId: v.id("investigations") },
+  returns: v.null(),
+  handler: async (ctx, { investigationId }) => {
+    const marketListings = await ctx.runQuery(internal.market.researchInput, { investigationId });
+    await executeInvestigation(convexStore(ctx), investigationId, { marketListings, externalIntelMode: "live", provider: null, stepDelayMs: 0 });
+    return null;
+  },
+});
+
 const BATCH = 400;
 
 /** Deletes and reseeds the demo company, then runs a baseline investigation without pacing. */

@@ -38,6 +38,14 @@ describe("Actor price extraction", () => {
     expect(extractProduct("<html><h1>Sold out</h1></html>").price).toBeNull();
   });
 
+  it("reads named ProductGroup variants and rejects concatenated sale/list prices", () => {
+    const html = `<script type="application/ld+json">${JSON.stringify({ "@type": "ProductGroup", name: "Nano 24", hasVariant: [{ "@type": "Product", name: "Black", offers: { price: 99.95, priceCurrency: "USD", availability: "https://schema.org/InStock" } }] })}</script>`;
+    expect(extractProduct(html)).toMatchObject({ price: 99.95, productName: "Nano 24 Black", availability: "in_stock" });
+    expect(extractProduct(`<div class="price">$99.95 $119.95</div>`).price).toBeNull();
+    expect(extractProduct(`<span data-price="true">$99.95</span>`).price).toBe(99.95);
+    expect(extractProduct(`<span class="price">99.95</span>`).currency).toBeNull();
+  });
+
   it("parses localized price strings", () => {
     expect(parsePrice("1.299,00 €")).toBe(1299);
     expect(parsePrice("59,95")).toBe(59.95);

@@ -158,7 +158,7 @@ export const saveFinding = internalMutation({
     }
 
     const prior = await findPriorDecision(ctx, organizationId, bundle.finding.fingerprint, investigationId);
-    const carry = resolveCarryForward(bundle.credible, prior);
+    const carry = resolveCarryForward(bundle.credible, prior, bundle.recommendation.actionType === "CHANGE_PRICE" ? { fromPriceCents: bundle.recommendation.metadata.fromPriceCents, toPriceCents: bundle.recommendation.metadata.toPriceCents } : undefined);
     const findingId = await ctx.db.insert("findings", {
       ...bundle.finding,
       investigationId,

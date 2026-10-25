@@ -240,7 +240,7 @@ describe("competitor pricing", () => {
     competitorName: competitor,
     priceCents: price,
     currency: "USD",
-    productUrl: "https://example.com",
+    productUrl: `https://${competitor}.example.com/product`,
     capturedAt: d("2026-09-30"),
     availability: "in_stock",
     captureMode: "fixture",
@@ -255,6 +255,11 @@ describe("competitor pricing", () => {
     expect(opp.recommendedPriceCents).toBe(5500);
     expect(opp.monthlyUpsideCents).toBe(15400); // $6 * 77 / 3
     expect(opp.annualUpsideCents).toBe(184800); // $6 * 77 * 4
+  });
+
+  it("does not establish an opportunity from duplicate, foreign or sold-out quotes", () => {
+    const quote = obs(9900, "a");
+    expect(calculatePricingOpportunity("p1", 4900, [quote, { ...quote }, { ...obs(9900, "b"), currency: "EUR" }, { ...obs(9900, "c"), availability: "out_of_stock" }], 77)).toBeNull();
   });
 
   it("requires at least two observations and a real gap", () => {

@@ -36,7 +36,8 @@ await Actor.main(async () => {
         }
         try {
             await checkUrl(url);
-            requests.push({ url, uniqueKey: `${internalProductId}|${competitor}|${url}`, userData: { internalProductId, competitor } });
+            const expectedNameTokens = Array.isArray(item.expectedNameTokens) ? item.expectedNameTokens.filter((t) => typeof t === 'string' && t.length > 0).slice(0, 6) : [];
+            requests.push({ url, uniqueKey: `${internalProductId}|${competitor}|${url}`, userData: { internalProductId, competitor, expectedNameTokens } });
         } catch (error) {
             failures.push({ url, competitor, internalProductId, reason: error instanceof Error ? error.message : String(error) });
         }
@@ -44,7 +45,7 @@ await Actor.main(async () => {
 
     let written = 0;
     const crawler = new CheerioCrawler({
-        maxConcurrency: Number(input.maxConcurrency) || 5,
+        maxConcurrency: Math.min(20, Math.max(1, Math.floor(Number(input.maxConcurrency) || 5))),
         maxRequestRetries: 2,
         requestHandlerTimeoutSecs: 30,
         navigationTimeoutSecs: 30,
@@ -54,8 +55,12 @@ await Actor.main(async () => {
                 await checkUrl(request.loadedUrl); // redirects must also stay public
             }
             const extracted = extractProduct(String(body));
-            if (!extracted.price) {
-                failures.push({ url: request.url, competitor, internalProductId, reason: 'No price found on page' });
+            if (!request.userData.expectedNameTokens.every((t) => String(extracted.productName ?? '').toLowerCase().includes(t.toLowerCase()))) {
+                failures.push({ url: request.url, competitor, internalProductId, reason: 'Product identity did not match the expected name tokens' });
+                return;
+            }
+            if (!extracted.price || !extracted.currency) {
+                failures.push({ url: request.url, competitor, internalProductId, reason: 'No unambiguous price and currency found on page' });
                 log.warning(`No price found for ${competitor} at ${request.url}`);
                 return;
             }
@@ -81,5 +86,6 @@ await Actor.main(async () => {
 
     if (requests.length > 0) await crawler.run(requests);
     await Actor.setValue('FAILURES', failures);
+    await Actor.setValue('SUMMARY', { requested: products.length, extracted: written, failed: failures.length, capturedAt: new Date().toISOString() });
     log.info(`Extracted ${written} prices; ${failures.length} pages failed.`);
 });

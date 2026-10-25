@@ -1,0 +1,101 @@
+{
+  "actorId": "aidengrails~ledgerlens-competitor-pricing",
+  "capture": {
+    "at": "2026-10-25T08:01:13.835Z",
+    "datasetId": "5EgC1yt4GuQhfebK1",
+    "durationMs": 11840,
+    "requested": 3,
+    "runId": "wVzqauODYyITpuVD5",
+    "warnings": []
+  },
+  "configured": true,
+  "latest": {
+    "error": null,
+    "id": "k5785cn19p6bxjz1xftjfdb9hh8gy41x",
+    "startedAt": "2026-10-25T08:00:59.672Z",
+    "status": "COMPLETED"
+  },
+  "opportunity": {
+    "annualCents": 108000,
+    "eligibleQuotes": 3,
+    "findingId": "jx7fwbkrbgp70wjdqf2dcz0y5x8gzfqx",
+    "medianCents": 9995,
+    "monthlyCents": 9000,
+    "monthlyUnits": 9,
+    "recommendedCents": 8900
+  },
+  "organization": {
+    "demoMode": true,
+    "name": "Acme Outdoor Co."
+  },
+  "product": {
+    "name": "Trail Daypack 24L",
+    "priceCents": 7900,
+    "sku": "TRL-DPK-24"
+  },
+  "progress": [
+    {
+      "message": "Apify agent analyzing 3 competitor pages",
+      "runId": null,
+      "status": "started"
+    },
+    {
+      "message": "Apify run wVzqauODYyITpuVD5 started for 3 pages",
+      "runId": "wVzqauODYyITpuVD5",
+      "status": "info"
+    },
+    {
+      "message": "Apify run running",
+      "runId": "wVzqauODYyITpuVD5",
+      "status": "info"
+    },
+    {
+      "message": "Apify run succeeded",
+      "runId": "wVzqauODYyITpuVD5",
+      "status": "info"
+    },
+    {
+      "message": "Collected 3 competitor prices (Live, Apify run wVzqauODYyITpuVD5)",
+      "runId": "wVzqauODYyITpuVD5",
+      "status": "completed"
+    }
+  ],
+  "quotes": [
+    {
+      "availability": "in_stock",
+      "capturedAt": "2026-10-25T08:01:09.113Z",
+      "currency": "USD",
+      "eligible": true,
+      "method": "json-ld",
+      "name": "Gregory Nano 24 L Backpack Moab Tan One Size",
+      "previousPriceCents": null,
+      "priceCents": 9995,
+      "retailer": "Al's Sporting Goods",
+      "url": "https://www.als.com/gregory-nano-24-l-backpack-10605061/p"
+    },
+    {
+      "availability": "in_stock",
+      "capturedAt": "2026-10-25T08:01:09.444Z",
+      "currency": "USD",
+      "eligible": true,
+      "method": "json-ld",
+      "name": "Gregory Nano 24",
+      "previousPriceCents": null,
+      "priceCents": 9995,
+      "retailer": "Quest Outdoors",
+      "url": "https://www.questoutdoors.com/products/gregory-nano-24"
+    },
+    {
+      "availability": "in_stock",
+      "capturedAt": "2026-10-25T08:01:09.904Z",
+      "currency": "USD",
+      "eligible": true,
+      "method": "json-ld",
+      "name": "Nano 24",
+      "previousPriceCents": null,
+      "priceCents": 9995,
+      "retailer": "Gregory",
+      "url": "https://www.gregory.com/packs/day-packs/nano-24/153059XXXX.html?dwvar_153059XXXX_color=1530599974"
+    }
+  ]
+}

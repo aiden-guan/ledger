@@ -30,6 +30,8 @@ export interface ExecuteOptions {
   /** Override the configured model (null = deterministic only). */
   provider?: LLMProvider | null;
   externalIntelMode?: "live" | "fixture";
+  /** Explicit, curated retailer pages for a live-only market check. */
+  marketListings?: ListingRequest[];
 }
 
 /** Investigations still "running" after this long are treated as abandoned. */
@@ -57,6 +59,9 @@ export async function executeInvestigation(store: InvestigationStore, investigat
     await transition(store, inv, "INGESTING", started);
     await step("ingest", "started", "Loading ledger");
     const ledger = buildLedger(await store.loadLedger(inv.organizationId));
+    if (options.marketListings) {
+      ledger.listings = options.marketListings.map((l) => ({ ...l, competitorProductId: l.url, externalName: l.competitorName }));
+    }
     const stats = {
       transactions: ledger.transactions.length,
       sales: ledger.sales.length,
@@ -126,6 +131,7 @@ export async function executeInvestigation(store: InvestigationStore, investigat
       }),
     };
     const plan = await decideInvestigationPlan(provider, context);
+    if (options.marketListings) plan.value.productsToResearch = [...new Set(options.marketListings.map((l) => l.productId))];
     await step(
       "hypotheses",
       "completed",
@@ -137,7 +143,7 @@ export async function executeInvestigation(store: InvestigationStore, investigat
 
     // ---- GATHERING_EXTERNAL_EVIDENCE ------------------------------------
     await transition(store, inv, "GATHERING_EXTERNAL_EVIDENCE", started);
-    const requests: ListingRequest[] = plan.value.productsToResearch.flatMap((pid) =>
+    const requests: ListingRequest[] = options.marketListings ?? plan.value.productsToResearch.flatMap((pid) =>
       (listingsByProduct.get(pid) ?? []).map((l) => ({
         productId: l.productId,
         productSku: l.productSku,
@@ -154,6 +160,7 @@ export async function executeInvestigation(store: InvestigationStore, investigat
         apifyToken: env.APIFY_TOKEN,
         actorId: env.APIFY_ACTOR_ID,
         timeoutMs: env.APIFY_TIMEOUT_MS,
+        allowFixtureFallback: options.marketListings ? false : undefined,
         onProgress: (u) => step("market", "info", u.message, { apifyStatus: u.status, runId: u.runId }),
       });
       if (market.observations.length) {
@@ -192,7 +199,8 @@ export async function executeInvestigation(store: InvestigationStore, investigat
       // Partial completion: internal findings still complete without market evidence.
       const message = error instanceof Error ? error.message : String(error);
       warnings.push(`Market research failed: ${message}`);
-      await step("market", "failed", `Market research unavailable: ${message}. Continuing with internal findings.`);
+      await step("market", "failed", options.marketListings ? `Market check stopped: ${message}` : `Market research unavailable: ${message}. Continuing with internal findings.`);
+      if (options.marketListings) throw error;
     }
     await sleep(stepDelay);
 
@@ -346,7 +354,7 @@ export async function executeInvestigation(store: InvestigationStore, investigat
           warnings,
           partial: warnings.length > 0,
           externalIntel: market
-            ? { mode: market.mode, sandbox: market.mode === "live" && market.observations.length > 0 && market.observations.every((o) => isSandboxListingUrl(o.productUrl)), requestedMode: market.requestedMode, runId: market.runId, fallbackReason: market.fallbackReason, observations: market.observations.length, durationMs: market.durationMs }
+            ? { mode: market.mode, sandbox: market.mode === "live" && market.observations.length > 0 && market.observations.every((o) => isSandboxListingUrl(o.productUrl)), requestedMode: market.requestedMode, runId: market.runId, actorId: market.actorId ?? null, datasetId: market.datasetId ?? null, fallbackReason: market.fallbackReason, observations: market.observations.length, listingsRequested: market.listingsRequested, durationMs: market.durationMs }
             : null,
           ai: { provider: provider?.name ?? "deterministic", model: provider?.model ?? null, planSource: plan.source, modelExplanations: modelCount },
           durationMs: Date.now() - started,

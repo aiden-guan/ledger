@@ -797,6 +797,7 @@ export function Overview({ source }: { source: Source }) {
           </Link>
           {field && <span className="hidden font-mono text-[12px] text-muted-foreground md:inline">/ {field.organizationName.toLowerCase()}</span>}
           <div className="ml-auto flex items-center gap-1 font-mono text-[12px]">
+            <Link href="/market-check" className="px-2 py-1 text-muted-foreground transition-colors hover:text-foreground">market ↗</Link>
             <span className="mr-2 hidden items-center gap-1.5 text-faint sm:flex" title={source.mode === "live" ? "Connected to the Convex backend" : "Offline replay of the engine"}>
               <span className={cn("size-1.5", source.mode === "live" ? "bg-signal" : "bg-found")} />
               {source.mode}

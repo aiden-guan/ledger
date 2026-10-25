@@ -6,10 +6,10 @@
     "products": {
       "title": "Competitor product pages",
       "type": "array",
-      "description": "Pages to visit. Each item: { internalProductId, competitor, url }.",
+      "description": "Pages to visit. Each item: { internalProductId, competitor, url, expectedNameTokens? }. Name tokens reject a redirected or mismatched product.",
       "editor": "json",
       "prefill": [
-        { "internalProductId": "demo-product", "competitor": "Ridgeline Supply Co.", "url": "https://example.com/product" }
+        { "internalProductId": "daypack-24", "competitor": "Quest Outdoors", "url": "https://www.questoutdoors.com/products/gregory-nano-24", "expectedNameTokens": ["nano", "24"] }
       ]
     },
     "maxConcurrency": {
