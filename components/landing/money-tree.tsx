@@ -73,6 +73,20 @@ const ROCKS = [
   { key: "ask", name: "Questions about the books", sub: "Answered with the records behind each claim." },
 ];
 
+/**
+ * Notes on the story after the pond, following one finding from the payment that went out twice to
+ * the money coming back: each from story time `from` to `to`, beside what it is about, on its
+ * `side` of it, `dy` px above or below.
+ */
+type StoryNote = { key: "leak" | "chase" | "proof" | "back" | "more"; from: number; to: number; side: "left" | "right"; dy: number };
+const STORY_NOTES: StoryNote[] = [
+  { key: "leak", from: STORY.bite[0] + 4, to: STORY.bag[1], side: "left", dy: 0 },
+  { key: "chase", from: STORY.walk[0] + 16, to: STORY.trip[0] + 2, side: "left", dy: 56 },
+  { key: "proof", from: STORY.trip[0] - 2, to: STORY.reunite[0] + 24, side: "left", dy: -110 },
+  { key: "back", from: STORY.reunite[0] + 20, to: STORY.young[0] + 6, side: "right", dy: -30 },
+  { key: "more", from: STORY.young[0] + 14, to: STORY.home[0] + 30, side: "right", dy: -30 },
+];
+
 // Ink colours by INK index: bark, shadow, rust, moss, light moss, fruit, pale fruit, dust, navy,
 // then the pond's petal, pale petal, gold and violet.
 const PALETTES = {
@@ -160,6 +174,17 @@ export function MoneyTree({ data }: { data: LandingData }) {
     ];
   }, [tree, data, leaks]);
 
+  // What the story's notes say, all of it from the engine's run over the demo books.
+  const tale = useMemo(() => {
+    const dup = data.duplicate;
+    const iDup = data.leaks.findIndex((l) => l.cents === dup.cents && l.once);
+    const lines = data.labels.filter((_, i) => data.points[i][2] === iDup);
+    const rest = data.leaks.filter((_, i) => i !== iDup);
+    const sum = format(rest.reduce((a, l) => a + l.cents, 0));
+    const count = ["No", "One", "Two", "Three", "Four", "Five", "Six"][rest.length] ?? String(rest.length);
+    return { dup, lines, kinds: rest.map((l, i) => (i ? l.kind.toLowerCase() : l.kind)).join(", "), sum: `${sum}${rest.every((l) => !l.once) ? " a year" : " in year one"}`, count };
+  }, [data]);
+
   const section = useRef<HTMLElement>(null);
   const stage = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -174,6 +199,8 @@ export function MoneyTree({ data }: { data: LandingData }) {
   const nodeEls = useRef<Record<string, HTMLDivElement | null>>({});
   const noteEls = useRef<Record<string, HTMLDivElement | null>>({});
   const rockEls = useRef<(HTMLDivElement | null)[]>([]);
+  const storyEls = useRef<Record<string, HTMLDivElement | null>>({});
+  const readEl = useRef<HTMLSpanElement>(null);
   // Set by the drawing effect, so handlers can reach it without re-rendering.
   const ctl = useRef<Controls>({ hover: () => undefined, open: () => undefined });
 
@@ -223,6 +250,8 @@ export function MoneyTree({ data }: { data: LandingData }) {
     let pointer: { x: number; y: number } | null = null;
     let frame = 0;
     let lastFound = "";
+    let lastRead = "";
+    const records = data.stats.records;
     let W = 200;
 
     // What is in focus (hovered, or opened), and how far the rest has faded back.
@@ -917,6 +946,8 @@ export function MoneyTree({ data }: { data: LandingData }) {
           if (f > p.at + 0.05) plot(x + (Math.cos(a * 2) > 0 ? cell : 0), y + (Math.cos(a * 2) > 0 ? 0 : cell), p.ink, part, 12);
         }
       }
+      // Where the story's notes point, on screen.
+      const marks: Partial<Record<StoryNote["key"], [number, number]>> = {};
       // The rest of the story, below the pond.
       if (story && journey && v > 0) {
         const s0 = story;
@@ -986,6 +1017,10 @@ export function MoneyTree({ data }: { data: LandingData }) {
           const sway = Math.sin(t * 7) * 0.35;
           drawKoi(fish[0], hang(basketAt[0] + sway * 4, basketAt[1] + hS * 0.06, -Math.PI / 2 + sway, wifeLen * 0.42, 0, 0.15, spines[0]), wifeLen * 0.42, 1, POND.koi(0), 0, 0, 0, true, 6);
         }
+        // The note on the payment that went out twice: on her in the water, on the line, then on the basket.
+        if (v < hooked) marks.leak = [toX(painter, spines[0][0]) - wifeLen * 0.4, toY(painter, spines[0][1])];
+        else if (head) marks.leak = [head[0] - wifeLen * 0.35, head[1] + wifeLen * 0.3];
+        else if (basketAt && v < STORY.fall[0]) marks.leak = [basketAt[0] - hS * 0.08, basketAt[1]];
         // The basket, flying when he falls, then on the bank with its lid open.
         if (v >= STORY.basket[0]) {
           const u = smooth(STORY.basket[0], STORY.basket[1], v);
@@ -1011,6 +1046,7 @@ export function MoneyTree({ data }: { data: LandingData }) {
           if (!still) tail0 += (dt / 1000) * lerp(2.6, 1.1, smooth(STORY.fall[1], STORY.reunite[1], v));
           const sp = follow(s0.after.xy, s0.after.at, s0.afterAt(v) + onward[0] * s0.home.r, s0.wife, 1, tail0, 1, spines[0]);
           drawKoi(fish[0], sp, s0.wife, Math.max(0.05, rise), POND.koi(0), 0, 0, 0, false, v > STORY.young[0] ? 32 : 0, crisp);
+          marks.back = [toX(painter, sp[0]) + s0.wife * zoom * 0.45, toY(painter, sp[1])];
           if (v > STORY.young[0]) shadowKoi(sp, s0.wife, smooth(s0.reef.from, s0.reef.full, sp[0]));
         }
         // Their young, each coming up out of the deep a few dots at a time.
@@ -1020,6 +1056,7 @@ export function MoneyTree({ data }: { data: LandingData }) {
           if (rise <= 0) continue;
           const sp = follow(kid.path.xy, kid.path.at, kid.at(v) + onward[1] * s0.home.ring, s0.kid, 1, t * 2.2 + j * 0.9, 1, spines[5 + j]);
           drawKoi(fish[5 + j], sp, s0.kid, rise, POND.garden, j * 1.3, 0, 0, false, 32);
+          if (j === 0) marks.more = [toX(painter, sp[0]) + s0.kid * zoom * 0.6, toY(painter, sp[1])];
           shadowKoi(sp, s0.kid, smooth(s0.reef.from, s0.reef.full, sp[0]) * rise);
         }
         paintSplash(painter, s0.splash[0], s0.splash[1], v - STORY.fall[1], s0.h * 0.07, 14, [0.5, 0.5]);
@@ -1060,6 +1097,8 @@ export function MoneyTree({ data }: { data: LandingData }) {
         // The orange koi's temper, over its head.
         const rage = smooth(STORY.rage[0], STORY.rage[0] + 6, v) * (1 - smooth(STORY.rage[1] + 30, STORY.rage[1] + 60, v));
         if (rage > 0) paintAnger(painter, toX(painter, spines[1][0]) + cell * 3, toY(painter, spines[1][1]) - cell * 5, rage * (0.75 + 0.25 * Math.sin(t * 9)));
+        marks.chase = [toX(painter, spines[1][0]), toY(painter, spines[1][1]) + s0.koi * zoom * 0.3];
+        marks.proof = [toX(painter, s0.trip[0]) - s0.h * zoom * 0.12, toY(painter, s0.trip[1], s0.bank + s0.h * 0.08)];
       }
 
       rings = rings.filter((q) => now - q.at < 1900);
@@ -1345,6 +1384,40 @@ export function MoneyTree({ data }: { data: LandingData }) {
         ctx.globalAlpha = 1;
       }
 
+      // The story's notes, each beside what it is about from a marker with a leader to it; on a
+      // phone, at the bottom of the screen. The chase's counts the records read as it goes.
+      for (const n of STORY_NOTES) {
+        const el = storyEls.current[n.key];
+        if (!el) continue;
+        const at = marks[n.key];
+        const vis = at ? smooth(n.from, n.from + 6, v) * (1 - smooth(n.to - 6, n.to, v)) : 0;
+        el.style.opacity = String(vis);
+        el.style.pointerEvents = vis > 0.6 ? "auto" : "none";
+        el.style.visibility = vis <= 0 ? "hidden" : "visible";
+        if (!at || vis <= 0.001) continue;
+        const [ax, ay] = at;
+        const left = n.side === "left";
+        const width = el.offsetWidth;
+        let edge = left ? Math.max(16 + width, ax - 48) : Math.min(vw - 72 - width, ax + 48);
+        let top = Math.max(76, Math.min(vh - el.offsetHeight - 24, ay + n.dy - 18));
+        if (narrow) {
+          edge = 16;
+          top = vh - el.offsetHeight - 28;
+        }
+        el.style.transform = `translate(${Math.round(left && !narrow ? edge - width : edge)}px, ${Math.round(top)}px)`;
+        ctx.globalAlpha = vis;
+        const color = pal.inks[n.key === "leak" ? INK.moss : INK.fruit];
+        const cx = Math.floor(ax / cell);
+        const cy = Math.floor(ay / cell);
+        leader(cx, cy, Math.floor((left ? edge + 4 : edge - 4) / cell), Math.floor((top + 18) / cell), left, color);
+        marker(cx, cy, color, n.key === "back" || n.key === "more");
+      }
+      ctx.globalAlpha = 1;
+      if (readEl.current) {
+        const read = Math.round(records * smooth(STORY.walk[0] + 16, STORY.trip[0] - 4, v)).toLocaleString("en-US");
+        if (read !== lastRead) readEl.current.textContent = lastRead = read;
+      }
+
       if (status.current && found.current) {
         const f = format(cents);
         if (f !== lastFound) found.current.textContent = lastFound = f;
@@ -1622,7 +1695,7 @@ export function MoneyTree({ data }: { data: LandingData }) {
       st.removeEventListener("pointerleave", onLeave);
       offScheme();
     };
-  }, [tree, nodes, fish]);
+  }, [tree, nodes, fish, data.stats.records]);
 
   // Jump to a chapter: `at` is a distance into the section, in viewport heights.
   const jump = (at: number) => {
@@ -1743,6 +1816,66 @@ export function MoneyTree({ data }: { data: LandingData }) {
           >
             <span className="block text-[13px] font-medium leading-[18px] sm:text-[14px]">{rock.name}</span>
             <span className="block text-[11.5px] leading-snug text-faint sm:text-[12.5px]">{rock.sub}</span>
+          </div>
+        ))}
+
+        {/* The story's notes: small cards over the scene, like a readout of what the engine is doing. */}
+        {STORY_NOTES.map((n) => (
+          <div
+            key={n.key}
+            ref={(e) => void (storyEls.current[n.key] = e)}
+            className="pointer-events-none invisible absolute left-0 top-0 max-w-[calc(100vw-32px)] rounded-[4px] border border-foreground/10 bg-background/95 px-3 py-2.5 opacity-0 will-change-transform"
+          >
+            {n.key === "leak" && (
+              <>
+                <span className="mb-1 block font-mono text-[10px] uppercase tracking-[0.08em] text-signal">Leak</span>
+                <span className="block text-[13px] font-medium leading-[18px] sm:text-[14px]">Paid twice</span>
+                <span className="block text-[11.5px] leading-snug text-muted-foreground sm:text-[12.5px]">
+                  {tale.dup.vendor}, {tale.dup.invoice}
+                </span>
+                <span className="mt-1 block font-mono text-[11px] tabular text-found sm:text-[12px]">${tale.dup.amount}</span>
+              </>
+            )}
+            {n.key === "chase" && (
+              <>
+                <span className="mb-1 block font-mono text-[10px] uppercase tracking-[0.08em] text-found">Slow loop</span>
+                <span className="block text-[13px] font-medium leading-[18px] sm:text-[14px]">Following the money</span>
+                <span className="block text-[11.5px] leading-snug text-muted-foreground sm:text-[12.5px]">Every record, every morning.</span>
+                <span className="mt-1 block font-mono text-[11px] tabular text-found sm:text-[12px]">
+                  <span ref={readEl}>0</span> of {data.stats.records.toLocaleString("en-US")} records
+                </span>
+              </>
+            )}
+            {n.key === "proof" && (
+              <>
+                <span className="mb-1 block font-mono text-[10px] uppercase tracking-[0.08em] text-found">Evidence</span>
+                <span className="block text-[13px] font-medium leading-[18px] sm:text-[14px]">Same invoice, {tale.dup.gapDays} days apart</span>
+                {tale.lines.map((line) => (
+                  <span key={line} className="mt-1 block truncate whitespace-pre font-mono text-[10px] leading-[15px] text-muted-foreground tabular sm:text-[11px] sm:leading-[16px]">
+                    {line}
+                  </span>
+                ))}
+              </>
+            )}
+            {n.key === "back" && (
+              <>
+                <span className="mb-1 block font-mono text-[10px] uppercase tracking-[0.08em] text-found">Fix</span>
+                <span className="block text-[13px] font-medium leading-[18px] sm:text-[14px]">Refund request drafted</span>
+                <span className="block text-[11.5px] leading-snug text-muted-foreground sm:text-[12.5px]">It waits for your approval.</span>
+                <span className="mt-1 block font-mono text-[11px] tabular text-found sm:text-[12px]">${tale.dup.amount} back</span>
+                <Link href="/overview" className="mt-2 inline-flex items-center gap-1 font-mono text-[11px] underline-offset-4 hover:underline sm:text-[12px]">
+                  Approve it in the demo <ArrowRight className="size-3" />
+                </Link>
+              </>
+            )}
+            {n.key === "more" && (
+              <>
+                <span className="mb-1 block font-mono text-[10px] uppercase tracking-[0.08em] text-found">Every morning</span>
+                <span className="block text-[13px] font-medium leading-[18px] sm:text-[14px]">{tale.count} more findings</span>
+                <span className="block text-[11.5px] leading-snug text-muted-foreground sm:text-[12.5px]">{tale.kinds}.</span>
+                <span className="mt-1 block font-mono text-[11px] tabular text-found sm:text-[12px]">{tale.sum}</span>
+              </>
+            )}
           </div>
         ))}
 
