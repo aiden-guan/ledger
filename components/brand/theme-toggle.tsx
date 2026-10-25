@@ -1,14 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { isDark, onThemeChange, setTheme } from "@/lib/theme";
+import { isDark, onThemeChange, setTheme, tintBar } from "@/lib/theme";
 import { cn } from "@/lib/utils/cn";
 
-/** A pixel disc, lit on one side: the switch between paper and night. */
+/** A pixel disc, lit on one side: the switch between paper and night. The page's theme lights it, so it is right from the first paint. */
 export function ThemeToggle({ className }: { className?: string }) {
   const [dark, setDark] = useState(false);
   useEffect(() => {
-    const on = () => setDark(isDark());
+    const on = () => {
+      setDark(isDark());
+      tintBar();
+    };
     on();
     return onThemeChange(on);
   }, []);
@@ -22,7 +25,7 @@ export function ThemeToggle({ className }: { className?: string }) {
     >
       <svg viewBox="0 0 9 9" aria-hidden className="size-[18px]" shapeRendering="crispEdges">
         {DISC.map(([x, y]) => (
-          <rect key={`${x}.${y}`} x={x + 0.1} y={y + 0.1} width={0.8} height={0.8} className={x < 4.5 === !dark ? "fill-current" : "fill-current opacity-25"} />
+          <rect key={`${x}.${y}`} x={x + 0.1} y={y + 0.1} width={0.8} height={0.8} className={x < 4.5 ? "fill-current dark:opacity-25" : "fill-current opacity-25 dark:opacity-100"} />
         ))}
       </svg>
     </button>
