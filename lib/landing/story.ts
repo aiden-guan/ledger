@@ -632,8 +632,9 @@ export function layStory(o: StoryInput): Story {
   const unit = Math.min(vw, o.view);
   const W2 = vw / 2;
   const land = (bx: number, by: number) => {
-    // Round the pond, but none on the land he walks along, or they would stand behind him.
-    if (bx > standX - h * 0.6) return false;
+    // Round the pond, but none on the land he walks along, or they would stand behind him, nor
+    // in the sky over the jetty, where his rod and line go and she comes up out of the water.
+    if (bx > standX - h * 1.1) return false;
     if (by < yB - o.view * 0.04) return Math.abs(bx) > W2 + unit * 0.06;
     if (Math.abs(bx - outletX) < outlet.half * 2.6 + unit * 0.06) return false;
     // Clear of the bank by more than his height, so nothing stands behind him as he goes along it.
@@ -654,9 +655,9 @@ export function layStory(o: StoryInput): Story {
     const kind = Math.floor(rnd() * 4);
     bushes.push({ x: bx, y: by, r, at: 0, dots: bushDots(kind, r, o.cell, rnd) });
   }
-  // And a hedge well back from the path he goes along, from the jetty to past where he falls:
-  // above his head on screen, thick, with a gap now and then, going by as he does.
-  for (let gx = standX - h * 0.2; gx < tripX + W * 0.8; gx += unit * lerp(0.07, 0.13, rnd())) {
+  // And a hedge well back from the path he goes along, from just past the jetty to past where he
+  // falls: above his head on screen, thick, with a gap now and then, going by as he does.
+  for (let gx = standX + h * 0.6; gx < tripX + W * 0.8; gx += unit * lerp(0.07, 0.13, rnd())) {
     if (rnd() < 0.08) {
       gx += unit * lerp(0.15, 0.3, rnd());
       continue;
@@ -675,7 +676,8 @@ export function layStory(o: StoryInput): Story {
   // The camera: on the pond while they meet, then pulled back and tilted to look across the river
   // at the jetty; following the chase; in close and overhead for the reunion; back out for the young.
   const pond = { x: 0, y: o.top + o.view / 2, zoom: 1, tilt: flat };
-  const across = (cx: number) => ({ x: cx, y: fb(standX) + (0.06 * vh) / (tilt * zoom), zoom, tilt });
+  // The far bank a little above the middle of the screen, leaving room over him for the rod.
+  const across = (cx: number) => ({ x: cx, y: fb(standX) - (0.03 * vh) / (tilt * zoom), zoom, tilt });
   const jetty = across(standX - W * (narrow ? 0.18 : 0.12));
   const follow = (v: number) => {
     const between = (manX(v) + koiX(v)) / 2 + W * (narrow ? 0.02 : 0.04);

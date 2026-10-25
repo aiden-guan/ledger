@@ -108,7 +108,10 @@ export function paintRiver(p: Painter, s: Story) {
       else if (hash2(Math.floor(wx / 30 - t * 1.4), Math.floor(wy / 7)) < 0.006 * glow) put(cx, cy, ink(n > 0.5 ? INK.moss : INK.mossLight), part, 1);
     }
 
-    if (inGap) continue;
+    if (inGap) {
+      paintInlet(p, s, cx, wx, fy, glow);
+      continue;
+    }
     // The far bank's face, lit across the top, darker and wet at the waterline.
     const f0 = Math.max(0, Math.floor(yLand / cell));
     const f1 = Math.min(gh - 1, Math.floor(yWater / cell));
@@ -158,6 +161,50 @@ export function paintRiver(p: Painter, s: Story) {
       const lit = -lx * 0.6 - (ly + 0.5) * 0.8 + bayer(cx, cy) * 0.4;
       put(cx, cy, p.stone(lit > 0.35 ? INK.dust : lit > -0.35 ? INK.bark : INK.navy), part, 9);
     }
+  }
+}
+
+/**
+ * One column of the stream's mouth, looking up it from the river: the far bank's face turning in
+ * along the stream's side where this column meets it, and the river's water reaching up between
+ * them, thinning as it goes.
+ */
+function paintInlet(p: Painter, s: Story, cx: number, wx: number, fy: number, glow: number) {
+  const { cell, gh, t, put } = p;
+  const reach = (s.outlet.bottom - s.outlet.top) * 0.4;
+  // Up the stream until this column is on its bank.
+  let ye = fy - reach;
+  let wall = false;
+  for (let y = fy; y > fy - reach; y -= 1.5) {
+    const e = s.stream(y);
+    if (!e) break;
+    if (wx < e[0] || wx > e[1]) {
+      ye = y;
+      wall = true;
+      break;
+    }
+  }
+  const yWater = toY(p, fy, 0);
+  const c0 = Math.max(0, Math.floor(toY(p, ye, 0) / cell));
+  const c1 = Math.min(gh - 1, Math.floor(yWater / cell) - 1);
+  for (let cy = c0; cy <= c1; cy++) {
+    const wy = fromY(p, (cy + 0.5) * cell);
+    const up = clamp01((fy - wy) / reach);
+    const n = noise(wx / 420 - t * 0.05, wy / 48 + t * 0.02) * 0.7 + noise(wx / 130 + 7, wy / 22) * 0.3;
+    if (bayer(cx, cy) + 0.5 < glow * (0.22 + Math.max(0, n - 0.32) * 1.25) * (1 - up) ** 1.4) put(cx, cy, p.shade(INK.mossLight), p.part, 1);
+  }
+  if (!wall) return;
+  // The bank's face as it turns in, in the shade of the stream's side.
+  const f0 = Math.max(0, Math.floor(toY(p, ye, s.bank) / cell));
+  const f1 = Math.min(gh - 1, Math.floor(toY(p, ye, 0) / cell));
+  for (let cy = f0; cy <= f1; cy++) {
+    const u = (cy - f0) / Math.max(1, f1 - f0);
+    const h = hash2(cx, cy * 7 + 3);
+    let k: number = INK.bark;
+    if (cy === f0) k = INK.dust;
+    else if (cy === f1) k = INK.navy;
+    else if (h < 0.3 || (u > 0.5 && bayer(cx, cy) > -0.1)) k = INK.rust;
+    put(cx, cy, p.stone(k), p.part, 5);
   }
 }
 
@@ -619,10 +666,13 @@ export function paintWake(p: Painter, way: { xy: Float64Array; at: Float64Array 
   const from = len * 0.55;
   const reach = len * lerp(1.3, 2.8, strength);
   const crest = len * 0.3;
+  const [, , hx, hy] = pointAt(way, s);
   for (let b = from; b < reach; b += len * 0.02) {
     const at = s - b;
     if (at < 0) break;
     const [x, y, dx, dy] = pointAt(way, at);
+    // Only as far back as it has come straight: round a turn the arms would close into a ring.
+    if (dx * hx + dy * hy < 0.6) break;
     const u = (b - from) / (reach - from);
     const w = len * 0.2 + (b - from) * 0.32 + Math.sin((at / crest) * Math.PI * 2) * len * 0.025;
     for (const side of [-1, 1]) {
