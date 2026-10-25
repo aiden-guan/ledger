@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Mark } from "@/components/brand/mark";
 import { ThemeToggle } from "@/components/brand/theme-toggle";
+import { SoundToggle } from "@/components/landing/sound-toggle";
 
 export function LandingNav() {
   return (
@@ -10,7 +11,8 @@ export function LandingNav() {
           <Mark />
           LedgerLens
         </Link>
-        <ThemeToggle className="ml-auto -mr-4" />
+        <SoundToggle className="ml-auto -mr-6" />
+        <ThemeToggle className="-mr-4" />
         <Link
           href="/overview"
           className="rounded-[var(--radius)] bg-foreground px-3.5 py-1.5 text-[13px] font-medium text-background transition-opacity hover:opacity-85"
