@@ -74,8 +74,8 @@ const KINDS: [CoralKind, number, number, number, [number, number], Hue[]][] = [
   ["anemone", 2, 5, 0.3, [5, 8], ["pink", "orange", "violet"]],
   ["tubes", 2, 4, 0, [4, 7], ["orange", "violet", "gold"]],
   ["star", 0, 2, 3, [2.5, 4], ["orange", "pink", "gold"]],
-  ["urchin", 0, 2, 1.5, [2.5, 3.6], ["violet", "blue"]],
-  ["clam", 0, 1.5, 1, [3, 4.5], ["blue", "violet"]],
+  ["urchin", 0, 2, 0.6, [2.5, 3.6], ["violet", "blue"]],
+  ["clam", 0, 1.5, 0.5, [3, 4.5], ["blue", "violet"]],
 ];
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
@@ -173,7 +173,7 @@ export function layReef(o: ReefInput): Reef {
     const y = lerp(vy - D * 0.75, vy + D * 0.75, rnd());
     const thick = patchAt(reef, x, y) * smooth(x0, reef.full, x);
     // Mostly in the patches; now and then something small out on the sand.
-    if (rnd() > thick * 0.97 + 0.05) continue;
+    if (rnd() > thick * 0.97 + 0.035) continue;
     const [kind, , , , [r0, r1], hues] = pick(thick);
     const r = lerp(r0, r1, rnd() ** (thick > 0.7 ? 0.7 : 1.6)) * o.scale * o.unit;
     const small = kind === "star" || kind === "urchin" || kind === "clam";
@@ -263,7 +263,7 @@ export function coralCells(c: Coral, unit: number, dark: boolean): Sprite {
           const u = d / e;
           const k = (LX * i + LY * j) / e;
           const warp = 3.1 * Math.sin(0.41 * i + 0.23 * j + s4) + 2.7 * Math.sin(0.37 * j - 0.19 * i + s5) + 1.6 * Math.sin(0.53 * i - 0.47 * j + s1);
-          const groove = Math.abs(Math.sin((i * ca + j * sa) * 0.95 + warp)) < 0.3;
+          const groove = Math.abs(Math.sin((i * ca + j * sa) * 0.8 + warp)) < 0.48;
           let ink: number = body;
           if (u > 0.9 && k < 0.1) ink = shadowInk;
           else if (groove) ink = k > 0.55 ? body : shadowInk;

@@ -75,16 +75,15 @@ export function paintRiver(p: Painter, s: Story) {
     const wx = fromX(p, (cx + 0.5) * cell);
     const fy = farBank(s, wx);
     const ny = nearBank(s, wx);
-    const gap = Math.abs(wx - s.outlet.x) < s.outlet.half ? 1 - Math.abs(wx - s.outlet.x) / s.outlet.half : 0;
-    const inGap = gap > 0;
+    const mouth = s.stream(fy - s.bank * 0.5);
+    const inGap = !!mouth && wx > mouth[0] && wx < mouth[1];
     const yLand = toY(p, fy, s.bank);
     const yWater = toY(p, fy, 0);
     const yNear = toY(p, ny, s.bank);
     if (yLand > gh * cell + 40 || yNear < -40) continue;
 
-    // The water, from the far bank (or up the gap to the pond) to where the near bank hides it.
-    const top = inGap ? toY(p, s.outlet.top, 0) : yWater;
-    const c0 = Math.max(0, Math.floor(top / cell));
+    // The water, from the far bank to where the near bank hides it.
+    const c0 = Math.max(0, Math.floor(yWater / cell));
     const c1 = Math.min(gh - 1, Math.floor(yNear / cell));
     const onDeck = wx > s.deck.x0 && wx < s.deck.x1;
     const deckFront = toY(p, s.deck.front, 0);
@@ -144,8 +143,10 @@ export function paintRiver(p: Painter, s: Story) {
       for (let cy = n0 + 1; cy < Math.min(gh, n0 + 3); cy++) if (hash2(cx, cy) < 0.25) put(cx, cy, p.stone(INK.dust), part, 3);
     }
   }
+  paintStream(p, s);
   paintDeck(p, s);
   paintReeds(p, s);
+  if (glow < 1) paintGlints(p, s, 1 - glow);
   // The rock in the path.
   const [rx, ry] = s.trip;
   const rr = s.h * 0.075;
@@ -156,6 +157,94 @@ export function paintRiver(p: Painter, s: Story) {
       if (lx * lx + (ly + 0.5) ** 2 * 1.3 > 1 || ly > 0.12) continue;
       const lit = -lx * 0.6 - (ly + 0.5) * 0.8 + bayer(cx, cy) * 0.4;
       put(cx, cy, p.stone(lit > 0.35 ? INK.dust : lit > -0.35 ? INK.bark : INK.navy), part, 9);
+    }
+  }
+}
+
+/**
+ * The stream the pond drains down to the river, drawn like the river above the pond: its banks as
+ * dots a few pixels apart with a pebble on the land side now and then, the pond's shore running
+ * off either side of its foot, and its current, short dashes running down it.
+ */
+function paintStream(p: Painter, s: Story) {
+  const { cell, gw, gh, t, put } = p;
+  const { top, bottom } = s.outlet;
+  const on = (sx: number, sy: number) => sx > -cell && sx < (gw + 1) * cell && sy > -cell && sy < (gh + 1) * cell;
+  const dot = (x: number, y: number, n: number, out: number) => {
+    const sx = toX(p, x);
+    const sy = toY(p, y, s.bank);
+    if (!on(sx, sy)) return;
+    const cx = Math.floor(sx / cell);
+    const cy = Math.floor(sy / cell);
+    put(cx, cy, p.stone(INK.dust), p.part, 3);
+    if (n % 7 === 3 && hash2(n, out + 5) < 0.75) {
+      const o = out * (2 + Math.floor(hash2(n, 7) * 3));
+      put(cx + o, cy, p.stone(hash2(n, 9) < 0.5 ? INK.bark : INK.dust), p.part, 3);
+      if (hash2(n, 11) < 0.5) put(cx + o + 1, cy + 1, p.stone(INK.dust), p.part, 3);
+    }
+  };
+  // Its banks, a dot every so far along each.
+  const gapAt = cell * 3;
+  for (const side of [0, 1]) {
+    let walked = 0;
+    let last: [number, number] | null = null;
+    let n = 0;
+    for (let y = top; y <= bottom; y += 1.5) {
+      const e = s.stream(y);
+      if (!e) continue;
+      if (last) walked += Math.hypot(e[side] - last[0], y - last[1]);
+      last = [e[side], y];
+      if (walked < gapAt) continue;
+      walked = 0;
+      dot(e[side], y, n++, side ? 1 : -1);
+    }
+  }
+  // The pond's shore either side of it, its line moving a little this way and that.
+  const e0 = s.stream(top)!;
+  const reach = s.koi * 9;
+  let n = 0;
+  for (let x = e0[0] - gapAt; x > e0[0] - reach; x -= gapAt) dot(x, top - s.koi * 0.05 * (1 - Math.cos((x - e0[0]) / 60)), n++, 0);
+  for (let x = e0[1] + gapAt; x < e0[1] + reach; x += gapAt) dot(x, top - s.koi * 0.05 * (1 - Math.cos((x - e0[1]) / 70)), n++, 0);
+  // The current, running down it.
+  const L = bottom - top;
+  const count = Math.round(L / 10);
+  for (let i = 0; i < count; i++) {
+    const y = top + ((((hash2(i, 53) * L + t * (26 + 18 * hash2(i, 52))) % L) + L) % L);
+    const e = s.stream(y);
+    if (!e) continue;
+    const fade = smooth(top, top + L * 0.12, y) * (1 - smooth(bottom - L * 0.06, bottom, y));
+    if (hash2(i, 47) > fade) continue;
+    const x = (e[0] + e[1]) / 2 + (hash2(i, 51) * 2 - 1) * 0.6 * ((e[1] - e[0]) / 2);
+    const sx = toX(p, x);
+    const sy = toY(p, y);
+    if (!on(sx, sy)) continue;
+    for (let j = 0; j < 3; j++) put(Math.floor(sx / cell), Math.floor(sy / cell) + j, p.shade(INK.mossLight), p.part, 1);
+  }
+}
+
+/**
+ * Looking down into the river, where it gives back no sky: sun on the water, short dashes that
+ * catch and let go on a lattice fixed to the plane, `amount` of them.
+ */
+function paintGlints(p: Painter, s: Story, amount: number) {
+  const { cell, gw, gh, t, put } = p;
+  const S = p.surface;
+  const ox = Math.round(S.x / cell);
+  const oy = Math.round(S.y / cell);
+  const step = 9;
+  for (let gy = Math.floor(-oy / step) - 1; gy <= Math.ceil((gh - oy) / step); gy++) {
+    for (let gx = Math.floor(-ox / step) - 1; gx <= Math.ceil((gw - ox) / step); gx++) {
+      const h = hash2(gx, gy * 3 + 7);
+      if (h > 0.22 * amount) continue;
+      const cx = gx * step + ox + Math.floor(hash2(gx, gy) * step);
+      const cy = gy * step + oy + Math.floor(hash2(gy, gx) * step);
+      const wx = fromX(p, (cx + 0.5) * cell);
+      const wy = fromY(p, (cy + 0.5) * cell);
+      if (wy < farBank(s, wx) + s.koi * 0.3 || wy > nearBank(s, wx) - s.koi * 0.3) continue;
+      const on = Math.sin(t * (0.8 + h * 3) + h * 40);
+      const len = on > 0.75 ? 3 : on > 0.4 ? 2 : on > 0.1 ? 1 : 0;
+      const drift = Math.round(Math.sin(t * 0.4 + h * 20) * 1.5);
+      for (let k = 0; k < len; k++) put(cx + k + drift, cy, p.shade(INK.mossLight), p.part, 2);
     }
   }
 }

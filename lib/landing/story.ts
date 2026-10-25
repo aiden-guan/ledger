@@ -219,8 +219,10 @@ export interface Story {
   width: number;
   bank: number;
   waves: [number, number, number, number];
-  /** The gap in the bank the pond drains through, `half` either side of x. */
-  outlet: { x: number; top: number; half: number };
+  /** The stream the pond drains down to the river, from its foot at the pond (top) to the river's far bank (bottom), `half` wide either side of x at its narrowest. */
+  outlet: { x: number; top: number; bottom: number; half: number };
+  /** The stream's banks at y on the plane, left and right, or null off its ends. */
+  stream: (y: number) => [number, number] | null;
   /** The jetty along the far bank: from x0 to x1, out over the water to `front`. */
   deck: { x0: number; x1: number; front: number };
   /** Where he stands to fish, the path he walks along the bank, and the rock he trips on. */
@@ -304,7 +306,17 @@ export function layStory(o: StoryInput): Story {
   const deck = { x0: standX - h * 0.45, x1: standX + h * (narrow ? 1.2 : 1.7), front: 0 };
   deck.front = fb(standX) + h * 0.2;
   const stand: Pt = [standX, fb(standX) + h * 0.07];
-  const outlet = { x: outletX, top: yB, half: o.koi * 0.55 };
+  // The stream the pond drains down to the river: drifting a little to the right as it goes, its
+  // banks flaring open into the pond at the top, as the river's do where it comes in above, and
+  // into the river below.
+  const outlet = { x: outletX, top: yB, bottom: fb(outletX), half: o.koi * 0.55 };
+  const stream = (y: number): [number, number] | null => {
+    if (y < outlet.top || y > outlet.bottom + bank) return null;
+    const u = (y - outlet.top) / (outlet.bottom - outlet.top);
+    const c = outletX + o.koi * 0.2 * u;
+    const half = outlet.half * (1 + 1.5 * (1 - smooth(0, 0.3, u)) ** 2 + 0.8 * smooth(0.7, 1, u) ** 2);
+    return [c - half + o.koi * 0.04 * Math.sin(y / 21 + 1), c + half + o.koi * 0.04 * Math.sin(y / 17 + 4)];
+  };
   const bite: Pt = [standX - W * (narrow ? 0.34 : 0.26), fb(standX) + width * 0.34];
   const liftAt: Pt = [standX - h * 0.5, deck.front + width * 0.07];
   const path = h * 0.12;
@@ -337,7 +349,7 @@ export function layStory(o: StoryInput): Story {
 
   // The orange koi in the river after him: it gains while he stops, though warily while he turns
   // to throw, and never quite catches him.
-  const lane = (x: number) => fb(x) + width * 0.3;
+  const lane = (x: number) => fb(x) + width * 0.5;
   const gapMin = h * 1.25;
   const koiXs: number[] = [];
   let kx = liftAt[0];
@@ -357,19 +369,22 @@ export function layStory(o: StoryInput): Story {
     const i = Math.min(koiXs.length - 2, Math.floor(f));
     return lerp(koiXs[i], koiXs[i + 1], Math.min(1, f - i));
   };
-  // Each spear lands where the koi's snout would have been, a little ahead; the koi swerves out
-  // toward the middle of the river just before.
-  const spears: Pt[] = STORY.spears.map((a) => {
-    const at = a + HITS;
-    const sx = koiX(at) + koi * 0.15;
-    return [sx, lane(sx)];
+  // Each spear goes in near the koi but clear of it, ahead or to one side (in koi lengths ahead of
+  // its snout, and river widths across), and the koi swerves away from it as it comes down.
+  const MISS: Pt[] = [
+    [1.1, -0.14],
+    [0.3, 0.18],
+    [1.4, 0.12],
+  ];
+  const spears: Pt[] = STORY.spears.map((a, k) => {
+    const sx = koiX(a + HITS) + koi * MISS[k][0];
+    return [sx, lane(sx) + width * MISS[k][1]];
   });
   const dodge = (v: number) => {
     let d = 0;
     STORY.spears.forEach((a, k) => {
-      const at = a + HITS;
-      const u = (v - (at - 1)) / 8;
-      if (u > -1 && u < 1) d += Math.cos((u * Math.PI) / 2) ** 2 * width * (0.24 + k * 0.03) * (k % 2 ? 0.8 : 1);
+      const u = (v - (a + HITS - 1)) / 8;
+      if (u > -1 && u < 1) d -= Math.sign(MISS[k][1]) * Math.cos((u * Math.PI) / 2) ** 2 * width * 0.1;
     });
     return d;
   };
@@ -588,6 +603,8 @@ export function layStory(o: StoryInput): Story {
   const rest = { x: home.x, y: home.y - D * (narrow ? 0.14 : 0.12) };
   const onScreen = (u: number, w: number): Pt => [rest.x + (u - 0.5) * A, rest.y + (w - 0.5) * D];
   const [w0, w1] = narrow ? [onScreen(0.02, 0.15), onScreen(0.98, 0.42)] : [onScreen(0.22, 0.17), onScreen(0.78, 0.41)];
+  // And of the links along the very bottom.
+  const [f0, f1] = [onScreen(-0.1, narrow ? 0.92 : 0.95), onScreen(1.1, 1.05)];
   const banks = { far, waves, width, sea, bend };
   const reef = layReef({
     sea,
@@ -596,7 +613,10 @@ export function layStory(o: StoryInput): Story {
     down: D,
     unit: o.cell / zr,
     keepOff: {
-      boxes: [[w0[0], w0[1], w1[0], w1[1]]],
+      boxes: [
+        [w0[0], w0[1], w1[0], w1[1]],
+        [f0[0], f0[1], f1[0], f1[1]],
+      ],
       circles: [[home.x, home.y, ring + kid * 0.9]],
       channel: [...route.slice(1), [home.x - ring, home.y]],
       half: koi * 0.55,
@@ -615,7 +635,7 @@ export function layStory(o: StoryInput): Story {
     // Round the pond, but none on the land he walks along, or they would stand behind him.
     if (bx > standX - h * 0.6) return false;
     if (by < yB - o.view * 0.04) return Math.abs(bx) > W2 + unit * 0.06;
-    if (Math.abs(bx - outletX) < outlet.half + unit * 0.06) return false;
+    if (Math.abs(bx - outletX) < outlet.half * 2.6 + unit * 0.06) return false;
     // Clear of the bank by more than his height, so nothing stands behind him as he goes along it.
     return by < fb(bx) - h * 1.45;
   };
@@ -712,6 +732,7 @@ export function layStory(o: StoryInput): Story {
     bank,
     waves,
     outlet,
+    stream,
     deck,
     stand,
     path,

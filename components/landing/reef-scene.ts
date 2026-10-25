@@ -68,23 +68,6 @@ export function reefPainter() {
     }
 
     for (let i = 0; i < gw * gh; i++) if (floor[i] >= 0) put(i % gw, Math.floor(i / gw), floor[i], part, 1);
-    // Sun on the water: short dashes that catch and let go, on a lattice fixed to the plane.
-    const step = 9;
-    for (let gy = Math.floor(-oy / step) - 1; gy <= Math.ceil((gh - oy) / step); gy++) {
-      for (let gx = Math.floor(-ox / step) - 1; gx <= Math.ceil((gw - ox) / step); gx++) {
-        const h = hash2(gx, gy * 3 + 7);
-        if (h > 0.22) continue;
-        const cx = gx * step + ox + Math.floor(hash2(gx, gy) * step);
-        const cy = gy * step + oy + Math.floor(hash2(gy, gx) * step);
-        const wx = fromX((cx + 0.5) * cell);
-        if (wx < reef.from) continue;
-        const on = Math.sin(t * (0.8 + h * 3) + h * 40);
-        const len = on > 0.75 ? 3 : on > 0.4 ? 2 : on > 0.1 ? 1 : 0;
-        const drift = Math.round(Math.sin(t * 0.4 + h * 20) * 1.5);
-        for (let k = 0; k < len; k++) put(cx + k + drift, cy, p.shade(INK.mossLight), part, 2);
-      }
-    }
-
     // The corals, each where it sits on the floor.
     const right = fromX(gw * cell);
     const left = fromX(0);
