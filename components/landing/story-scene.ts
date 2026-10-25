@@ -145,6 +145,7 @@ export function paintRiver(p: Painter, s: Story) {
     }
   }
   paintDeck(p, s);
+  paintReeds(p, s);
   // The rock in the path.
   const [rx, ry] = s.trip;
   const rr = s.h * 0.075;
@@ -155,6 +156,36 @@ export function paintRiver(p: Painter, s: Story) {
       if (lx * lx + (ly + 0.5) ** 2 * 1.3 > 1 || ly > 0.12) continue;
       const lit = -lx * 0.6 - (ly + 0.5) * 0.8 + bayer(cx, cy) * 0.4;
       put(cx, cy, p.stone(lit > 0.35 ? INK.dust : lit > -0.35 ? INK.bark : INK.navy), part, 9);
+    }
+  }
+}
+
+/** Reeds along the near bank in clumps, some with cattails, leaning and stirring in the wind. */
+function paintReeds(p: Painter, s: Story) {
+  const { cell, gw, t, put } = p;
+  const S = p.surface;
+  const step = s.h * 0.035;
+  const x0 = fromX(p, -cell * 30);
+  const x1 = fromX(p, (gw + 30) * cell);
+  for (let k = Math.floor(x0 / step); k <= Math.ceil(x1 / step); k++) {
+    const clump = noise(k * 0.09 + 3.3, 7.9);
+    if (clump < 0.52 || hash2(k, 41) > (clump - 0.52) * 3.4) continue;
+    const x = (k + hash2(k, 43) - 0.5) * step;
+    const cx0 = Math.floor(toX(p, x) / cell);
+    const cy0 = Math.floor(toY(p, nearBank(s, x) + s.h * 0.04 * hash2(k, 47), s.bank) / cell);
+    const n = Math.ceil((s.h * (0.14 + 0.32 * hash2(k, 53) * clump) * S.lift * S.zoom) / cell);
+    if (n < 3) continue;
+    const lean = (hash2(k, 59) - 0.5) * 0.45;
+    const sway = Math.sin(t * 1.1 + x * 0.004) * 0.16 + Math.sin(t * 2.3 + k) * 0.04;
+    const cattail = hash2(k, 61) < 0.4;
+    for (let j = 0; j <= n; j++) {
+      const u = j / n;
+      const cx = cx0 + Math.round((lean * u + sway * u * u) * n);
+      const cy = cy0 - j;
+      if (cattail && u > 0.68 && u < 0.9) {
+        put(cx, cy, p.stone(INK.rust), p.part, 34);
+        put(cx + 1, cy, p.stone(u > 0.8 ? INK.rust : INK.bark), p.part, 34);
+      } else put(cx, cy, u < 0.35 ? p.stone(INK.bark) : u > 0.8 && !cattail ? INK.gold : hash2(k, j) < 0.3 ? INK.gold : p.stone(INK.bark), p.part, 33);
     }
   }
 }
@@ -177,7 +208,7 @@ function paintDeck(p: Painter, s: Story) {
     for (let cy = top; cy <= edge; cy++) {
       // Planks lit along their tops, a dark seam between each.
       const grain = hash2(cx, cy * 3 + 1);
-      let ink: number = gapCol ? INK.rust : grain < 0.12 ? INK.rust : (Math.floor(k / plank) & 1) === 0 ? INK.dust : INK.bark;
+      let ink: number = gapCol ? INK.rust : grain < 0.035 ? INK.rust : (Math.floor(k / plank) & 1) === 0 ? INK.dust : grain < 0.45 ? INK.bark : INK.dust;
       if (cy === top) ink = INK.dust;
       put(cx, cy, p.stone(ink), p.part, 7);
     }
@@ -259,11 +290,22 @@ export function paintFloat(p: Painter, x: number, y: number) {
   p.put(cx + 1, cy, p.night ? INK.shadow : INK.dust, p.part, 32);
 }
 
+/** Clears a pixel to the page itself (white water, on a light page), or on a dark page leaves a pale fleck now and then. */
+function foam(p: Painter, cx: number, cy: number, z: number) {
+  p.put(cx, cy, p.night && bayer(cx, cy) < -0.3 ? INK.shadow : -1, p.part, z);
+}
+
+/** A drop: a blue pixel with clear water round it, so it reads against the stippled river. */
+function drop(p: Painter, cx: number, cy: number, ink: number, z: number) {
+  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) if (i || j) foam(p, cx + i, cy + j, z - 2);
+  p.put(cx, cy, ink, p.part, z);
+}
+
 /**
  * Water thrown up where something goes in at (x, y) on the plane, `age` story-vh after: for a
- * moment a dark hole, then a crown of water standing up round it whose rim breaks into drops,
- * spray flung up and out (more of it the way it was going), a column that jumps up once the hole
- * closes and falls back, and rings spreading on the surface.
+ * moment a dark hole, then a crown of clear water standing up round it, a cup seen from the side
+ * whose rim breaks into drops that fly up and out and fall; a column that jumps up once the hole
+ * closes and falls back; and rings spreading on the surface, each with clear water inside it.
  */
 export function paintSplash(p: Painter, x: number, y: number, age: number, size: number, salt: number, dir: [number, number] = [0, 0], z = 45) {
   if (age < 0 || age > 26) return;
@@ -272,80 +314,102 @@ export function paintSplash(p: Painter, x: number, y: number, age: number, size:
   const rnd = mulberry32(salt);
   const u = age / 26;
   const cx0 = Math.floor(toX(p, x) / cell);
+  const cy0 = Math.floor(toY(p, y) / cell);
+  const deep = p.shade(INK.navy);
+  const blue = p.shade(INK.moss);
   // The hole, open for a moment.
-  const hole = age < 3 ? Math.sin((Math.PI * age) / 3) * size * 0.7 : 0;
+  const hole = age < 3 ? Math.sin((Math.PI * age) / 3) * size * 0.6 : 0;
   if (hole > 0) {
-    const r = Math.ceil((hole * S.zoom) / cell);
-    const cy0 = Math.floor(toY(p, y) / cell);
-    for (let j = -r; j <= r; j++) {
-      for (let i = -r; i <= r; i++) {
-        const e = Math.hypot(i / r, j / Math.max(1, r * S.tilt));
-        if (e <= 0.75) put(cx0 + i, cy0 + j, p.shade(INK.navy), p.part, z - 8);
-        else if (e <= 1) put(cx0 + i, cy0 + j, p.shade(INK.moss), p.part, z - 8);
+    const r = Math.max(1, Math.round((hole * S.zoom) / cell));
+    const ry = Math.max(1, r * S.tilt);
+    for (let j = -Math.ceil(ry) - 1; j <= Math.ceil(ry) + 1; j++) {
+      for (let i = -r - 1; i <= r + 1; i++) {
+        const e = Math.hypot(i / r, j / ry);
+        if (e <= 0.7) put(cx0 + i, cy0 + j, deep, p.part, z - 8);
+        else if (e <= 1.05) put(cx0 + i, cy0 + j, blue, p.part, z - 8);
+        else if (e <= 1.5) foam(p, cx0 + i, cy0 + j, z - 9);
       }
     }
   }
-  // The crown: a wall of water round the hole, up and out and back down, its rim breaking into drops.
-  const crown = 16;
+  // The crown.
   const c0 = age / 9;
   if (c0 > 0 && c0 < 1) {
-    for (let j = 0; j < crown; j++) {
-      const a = ((j + rnd() * 0.5) / crown) * Math.PI * 2;
-      const lean = 1 + 0.6 * (Math.cos(a) * dir[0] + Math.sin(a) * dir[1]);
-      const r = size * (0.55 + c0 * 1.1) * lean;
-      const tall = size * (1.4 + rnd() * 0.9) * Math.sin(Math.PI * Math.min(1, c0 * 1.25)) * lean;
-      const wx = x + Math.cos(a) * r;
-      const wy = y + Math.sin(a) * r;
-      const front = Math.sin(a) > 0;
-      const sx = Math.floor(toX(p, wx) / cell);
-      const top = Math.floor(toY(p, wy, tall) / cell);
-      const foot = Math.floor(toY(p, wy, 0) / cell);
-      // The wall, thin and clear, and its rim.
-      for (let cy = top + 1; cy <= foot; cy++) if ((cy + j) % 2 === 0 || cy - top < 2) put(sx, cy, p.shade(INK.mossLight), p.part, front ? z - 1 : z - 10);
-      put(sx, top, p.shade(INK.moss), p.part, front ? z : z - 9);
-      // The rim lets go of a drop as the wall falls.
-      if (c0 > 0.45) {
-        const k = (c0 - 0.45) / 0.55;
-        put(sx + Math.round(Math.cos(a) * k * 2), Math.floor(toY(p, wy, tall + size * (0.5 + rnd()) * k * (1 - k) * 2) / cell), p.shade(INK.moss), p.part, front ? z : z - 9);
+    const grow = Math.sin((Math.PI / 2) * Math.min(1, c0 / 0.45));
+    const fall = c0 > 0.45 ? (c0 - 0.45) / 0.55 : 0;
+    const R = size * (0.45 + c0 * 0.8);
+    const H = size * 1.8 * grow * (1 - fall * fall);
+    // On screen: the rim, an ellipse up in the air, and the foot, the same ellipse on the water.
+    const rx = (R * S.zoom) / cell;
+    const ry = Math.max(0.6, rx * S.tilt);
+    const lift = (H * S.lift * S.zoom) / cell;
+    const top = toY(p, y, H) / cell;
+    const foot = toY(p, y) / cell;
+    if (fall < 0.7) {
+      // Clear water inside the cup and its sheet, under the shaft, and its outline: the two sides
+      // edge on, the rim (paler at the back), and the front of the foot.
+      for (let i = -Math.ceil(rx); i <= Math.ceil(rx); i++) {
+        const e = Math.sqrt(Math.max(0, 1 - (i / rx) ** 2));
+        const yTop = Math.round(top - e * ry);
+        const yFoot = Math.round(foot + e * ry);
+        for (let cy = yTop; cy <= yFoot; cy++) foam(p, cx0 + i, cy, 38);
+        if (fall < 0.2 || bayer(cx0 + i, yTop) < 0.3 - fall) {
+          put(cx0 + i, yTop, blue, p.part, z);
+          put(cx0 + i, Math.round(top + e * ry), p.shade(INK.mossLight), p.part, z - 1);
+          // The points of the crown, standing up off the rim.
+          if (lift > 2 && fall < 0.35 && (i + salt) % 3 === 0) {
+            foam(p, cx0 + i, yTop - 2, z - 2);
+            put(cx0 + i, yTop - 1, blue, p.part, z);
+            if (grow > 0.8) put(cx0 + i, yTop - 2, blue, p.part, z);
+          }
+        }
+        put(cx0 + i, yFoot, p.shade(INK.mossLight), p.part, z - 1);
+        if (Math.abs(i) >= rx - 1) for (let cy = yTop; cy <= Math.round(foot); cy++) put(cx0 + i, cy, blue, p.part, z);
+      }
+    }
+    // The rim breaks into drops, which fly on up and out, and fall.
+    if (fall > 0) {
+      for (let j = 0; j < 10; j++) {
+        const a = ((j + 0.5 * rnd()) / 10) * Math.PI * 2;
+        const lean = 1 + 0.5 * (Math.cos(a) * dir[0] + Math.sin(a) * dir[1]);
+        const out = R * (1 + fall * (0.6 + rnd() * 0.6) * lean);
+        const up = size * 1.8 * (1 + fall * (0.7 + rnd() * 0.5) - fall * fall * 2.4);
+        if (up < 0) continue;
+        drop(p, Math.floor(toX(p, x + Math.cos(a) * out) / cell), Math.floor(toY(p, y + Math.sin(a) * out, up) / cell), blue, Math.sin(a) > 0 ? z : z - 9);
       }
     }
   }
-  // Spray.
-  const drops = 22;
-  for (let i = 0; i < drops; i++) {
+  // Spray, thrown further the way it was going.
+  for (let i = 0; i < 12; i++) {
     const a = rnd() * Math.PI * 2;
-    const out = size * (0.6 + rnd() * 1.6) * (1 + 0.8 * (Math.cos(a) * dir[0] + Math.sin(a) * dir[1]));
-    const up = size * (1.6 + rnd() * 2.4);
-    const life = 0.3 + rnd() * 0.3;
+    const out = size * (0.8 + rnd() * 1.6) * (1 + 0.8 * (Math.cos(a) * dir[0] + Math.sin(a) * dir[1]));
+    const up = size * (1.8 + rnd() * 2.2);
+    const life = 0.28 + rnd() * 0.25;
     const k = u / life;
     if (k >= 1) continue;
-    const dx = Math.cos(a) * out * k;
-    const dy = Math.sin(a) * out * k;
     const h = up * 4 * k * (1 - k);
-    const sx = toX(p, x + dx);
-    const sy = toY(p, y + dy, h);
-    put(Math.floor(sx / cell), Math.floor(sy / cell), p.shade(i % 3 ? INK.mossLight : INK.moss), p.part, z);
-    // Drops trail a pixel behind them while they rise.
-    if (k < 0.4) put(Math.floor(sx / cell), Math.floor(sy / cell) + 1, p.shade(INK.mossLight), p.part, z - 1);
+    drop(p, Math.floor(toX(p, x + Math.cos(a) * out * k) / cell), Math.floor(toY(p, y + Math.sin(a) * out * k, h) / cell), i % 3 ? blue : deep, z);
   }
-  // The column: up once the hole closes, then back down.
-  const c = (age - 3) / 9;
+  // The column: up once the hole closes, then back down, a drop breaking off its top.
+  const c = (age - 6.5) / 8;
   if (c > 0 && c < 1) {
-    const tall = Math.sin(Math.PI * c) * size * 2.8;
-    for (let h = 0; h < tall; h += cell / (S.lift * S.zoom || 1)) {
-      const cy = Math.floor(toY(p, y, h) / cell);
-      put(cx0, cy, p.shade(h > tall - size * 0.6 ? INK.mossLight : INK.moss), p.part, z);
-      if (h < tall * 0.5) put(cx0 + 1, cy, p.shade(INK.mossLight), p.part, z - 1);
-      if (h < tall * 0.2) put(cx0 - 1, cy, p.shade(INK.mossLight), p.part, z - 1);
+    const tall = Math.sin(Math.PI * c) * size * 2.4;
+    const t0 = Math.floor(toY(p, y, tall) / cell);
+    for (let cy = t0 - 1; cy <= cy0; cy++) for (let i = -1; i <= 2; i++) foam(p, cx0 + i, cy, z - 3);
+    for (let cy = t0; cy <= cy0; cy++) {
+      put(cx0, cy, cy - t0 < 2 ? deep : blue, p.part, z);
+      if (cy - t0 > (cy0 - t0) * 0.6) put(cx0 + 1, cy, blue, p.part, z);
     }
-    // A drop breaks off the top as it falls back.
-    if (c > 0.55) put(cx0, Math.floor(toY(p, y, tall + size * (c - 0.55) * 2) / cell) - 1, p.shade(INK.moss), p.part, z);
+    if (c > 0.55) drop(p, cx0, Math.floor(toY(p, y, tall + size * (c - 0.55) * 2.5) / cell) - 2, blue, z);
   }
-  // Rings on the water.
+  // Rings on the water, each with clear water just inside it.
   for (let k = 0; k < 3; k++) {
-    const r = Math.max(0, (age - k * 2.2) / 26) ** 0.6 * size * 7;
-    if (r <= 0) continue;
-    p.ring(toX(p, x), toY(p, y), r * S.zoom, S.tilt, (1 - u) * (1 - k * 0.25), k ? INK.dust : p.shade(INK.mossLight), p.part, 4, 30 + k + salt);
+    const r = Math.max(0, (age - 2.5 - k * 2.6) / 26) ** 0.6 * size * 7 * S.zoom;
+    if (r <= cell * 2) continue;
+    const strength = (1 - u) * (1 - k * 0.22);
+    const sx = toX(p, x);
+    const sy = toY(p, y);
+    p.ring(sx, sy, r - cell, S.tilt, Math.min(1, strength * 1.5), -1, p.part, 3, 30 + k + salt);
+    p.ring(sx, sy, r, S.tilt, strength, k ? p.shade(INK.mossLight) : blue, p.part, 4, 40 + k + salt);
   }
 }
 

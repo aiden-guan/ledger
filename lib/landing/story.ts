@@ -49,9 +49,9 @@ export const STORY = {
   /** He walks off along the bank, the orange koi after him. */
   walk: [394, 520],
   /** He stops and throws a spear back at it, three times. */
-  spears: [520, 554, 588],
+  spears: [512, 556, 600],
   /** He runs, and it swims harder. */
-  run: [622, 672],
+  run: [626, 672],
   /** He trips on a rock; the basket flies and she falls into the river. */
   trip: [672, 688],
   basket: [676, 692],
@@ -72,7 +72,7 @@ export const STORY = {
 export const BROOD = 7;
 
 /** How long each throw takes, from turning round to walking on. */
-export const THROW = 34;
+export const THROW = 30;
 /** Within a throw: drawn back by, let go at, and in the water at. */
 const AIM = 11;
 const LET_GO = 13;
@@ -337,7 +337,7 @@ export function layStory(o: StoryInput): Story {
 
   // The orange koi in the river after him: it gains while he stops, though warily while he turns
   // to throw, and never quite catches him.
-  const lane = (x: number) => fb(x) + width * 0.17;
+  const lane = (x: number) => fb(x) + width * 0.3;
   const gapMin = h * 1.25;
   const koiXs: number[] = [];
   let kx = liftAt[0];
@@ -368,8 +368,8 @@ export function layStory(o: StoryInput): Story {
     let d = 0;
     STORY.spears.forEach((a, k) => {
       const at = a + HITS;
-      const u = (v - (at - 3)) / 7;
-      if (u > -1 && u < 1) d += Math.cos((u * Math.PI) / 2) ** 2 * width * (0.2 + k * 0.04) * (k % 2 ? 0.8 : 1);
+      const u = (v - (at - 1)) / 8;
+      if (u > -1 && u < 1) d += Math.cos((u * Math.PI) / 2) ** 2 * width * (0.24 + k * 0.03) * (k % 2 ? 0.8 : 1);
     });
     return d;
   };
@@ -465,8 +465,10 @@ export function layStory(o: StoryInput): Story {
   const chaseV: number[] = [];
   for (let v = STORY.rage[1]; v <= STORY.reunite[0]; v += 2) {
     const cx = koiX(v);
-    if (chase.length && cx - chase[chase.length - 1][0] < 4 && v < STORY.reunite[0]) continue;
-    chase.push([cx, lane(cx) + dodge(v)]);
+    const cy = lane(cx) + dodge(v);
+    const last = chase[chase.length - 1];
+    if (last && Math.hypot(cx - last[0], cy - last[1]) < 4 && v < STORY.reunite[0]) continue;
+    chase.push([cx, cy]);
     chaseV.push(v);
   }
   const chaseFrom = oPts.length;
@@ -631,6 +633,22 @@ export function layStory(o: StoryInput): Story {
     if (bushes.some((b) => Math.hypot(b.x - bx, b.y - by) < (b.r + r) * 0.66)) continue;
     const kind = Math.floor(rnd() * 4);
     bushes.push({ x: bx, y: by, r, at: 0, dots: bushDots(kind, r, o.cell, rnd) });
+  }
+  // And a hedge well back from the path he goes along, from the jetty to past where he falls:
+  // above his head on screen, thick, with a gap now and then, going by as he does.
+  for (let gx = standX - h * 0.2; gx < tripX + W * 0.8; gx += unit * lerp(0.07, 0.13, rnd())) {
+    if (rnd() < 0.08) {
+      gx += unit * lerp(0.15, 0.3, rnd());
+      continue;
+    }
+    for (let k = 0; k < 3; k++) {
+      const r = unit * lerp(0.045, 0.085, rnd());
+      const bx = gx + (rnd() - 0.5) * unit * 0.06;
+      const by = fb(bx) - h * (k === 0 ? lerp(1.95, 2.15, rnd()) : lerp(2.05, 2.7, rnd()));
+      // Few gold ones, so his coat stands out against them.
+      const kind = [0, 1, 3, 0, 1, 2, 3][Math.floor(rnd() * 7)];
+      bushes.push({ x: bx, y: by, r, at: 0, dots: bushDots(kind, r, o.cell, rnd) });
+    }
   }
   bushes.sort((a, b) => a.y - b.y);
 
