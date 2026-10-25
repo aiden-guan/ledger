@@ -11,7 +11,7 @@
 
 - Regenerated from existing finance engine: 428600 cents first-year opportunity; 105800 one-time + 322800 recurring annually; 1187 bank/sales records; four findings.
 - State checks passed: approval unavailable before review, approved state after the prepared-draft state, repeat approval does not accumulate money, reset returns to discovery, recovered cash remains zero.
-- JavaScript syntax check passed for app.mjs.
+- JavaScript syntax check passed for app.mjs. Full repository TypeScript checks also passed after adding the submission exporter.
 - Import archive was inspected: eleven regular source/asset files at the time of upload preparation, root index.html, no symbolic links, no credentials. The later package also includes the Geist font license.
 
 ## Limits and remaining actions

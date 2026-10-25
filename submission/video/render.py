@@ -29,8 +29,9 @@ def timestamp(s):
 total=0;srt=[];index=1;clips=[]
 for i,scene in enumerate(scenes):
     audio=WORK/f'{i:02}.wav'
-    with wave.open(str(audio),'wb') as wav:
-        voice.synthesize_wav(scene['text'],wav,SynthesisConfig(length_scale=.96))
+    if not audio.exists():
+        with wave.open(str(audio),'wb') as wav:
+            voice.synthesize_wav(scene['text'],wav,SynthesisConfig(length_scale=.96))
     with wave.open(str(audio)) as wav:duration=wav.getnframes()/wav.getframerate()+1.0
     im=Image.new('RGB',(1920,1080),'#f6f4ee');d=ImageDraw.Draw(im)
     d.text((70,48),'LedgerLens',font=font(32,weight='Medium'),fill='#111111')
@@ -59,7 +60,7 @@ for i,scene in enumerate(scenes):
         local_srt.append(f'{local_index}\n{timestamp(cursor)} --> {timestamp(end)}\n'+textwrap.fill(chunk,width=66)+'\n');local_index+=1;cursor=end
     sub=WORK/f'{i:02}-local.srt';sub.write_text('\n'.join(local_srt))
     clip=WORK/f'{i:02}.mp4'
-    vf=f"subtitles={sub}:force_style='FontName=DejaVu Sans,FontSize=19,PrimaryColour=&H00FFFFFF,OutlineColour=&H00202020,BorderStyle=3,Outline=1,MarginV=12'"
+    vf=f"subtitles={sub}:force_style='FontName=DejaVu Sans,FontSize=8,PrimaryColour=&H00FFFFFF,OutlineColour=&H00202020,BorderStyle=3,Outline=0.5,MarginV=6'"
     subprocess.run(['ffmpeg','-hide_banner','-loglevel','error','-y','-loop','1','-i',str(frame),'-i',str(audio),'-t',str(duration),'-vf',vf,'-r','24','-c:v','libx264','-preset','veryfast','-crf','20','-pix_fmt','yuv420p','-af','apad=pad_dur=1,loudnorm=I=-16:TP=-1.5:LRA=9','-c:a','aac','-b:a','128k','-movflags','+faststart',str(clip)],check=True)
     clips.append(clip);total+=duration;print(f'Scene {i+1}: {duration:.1f}s',flush=True)
 assert total<180,f'Video exceeds the brief: {total:.1f}s'
