@@ -14,17 +14,17 @@ import { isDark, onThemeChange } from "@/lib/theme";
 import { cn } from "@/lib/utils/cn";
 import { Count } from "./count";
 import { Details } from "./details";
-import { FieldCanvas, TONE, type Leader, type Scene, type Tone } from "./field-canvas";
-import { focusDomains, layoutField, lineY, place, recordAt, rowOf, yOf, type Geometry } from "./geometry";
+import { FieldCanvas, TONE, type Anchor, type Leader, type Scene, type Tone } from "./field-canvas";
 import { Machine } from "./machine";
 import { AskPanel, BooksPanel, DecidePanel, EndPanel, InvestigatePanel, ScreenPanel } from "./panels";
 import { errorText, useLiveSource, useReplaySource, type ReplaySnapshot, type Run, type Source } from "./source";
 import { machineView, readTrace } from "./system";
+import { layoutWall, recordAt, stackEdge, type Wall } from "./wall";
 
 /*
- * The overview is the product and the demo at once: one screen, five beats. The field shows every
- * record in the books; each beat asks for one thing (investigate, approve, screen, ask) and the
- * field answers by lighting up the records involved.
+ * The overview is the product and the demo at once: one screen, five beats. The wall shows every
+ * record in the books, one square each and one column per week; each beat asks for one thing
+ * (investigate, approve, screen, ask) and the wall answers by lighting up the records involved.
  */
 
 export function LiveOverview(props: { dashboard: Preloaded<typeof api.dashboard.get>; field: Preloaded<typeof api.field.get> }) {
@@ -142,16 +142,20 @@ function textWidth(text: string, px: number, font: "sans" | "medium" | "mono") {
   ruler.font = `${font === "medium" ? 500 : 400} ${px}px ${font === "mono" ? families.mono : families.sans}`;
   return ruler.measureText(text).width;
 }
-/** Width of a stacked label: a title, then an optional subtitle and a figure. */
-const labelWidth = (title: string, sub?: string, value?: string) =>
-  Math.ceil(Math.max(textWidth(title, 13.5, "medium"), sub ? textWidth(sub, 12, "sans") : 0, value ? textWidth(value, 12, "mono") : 0)) + 8;
+/** Width of a stacked label: a title over a figure. */
+const labelWidth = (title: string, value: string) => Math.ceil(Math.max(textWidth(title, 13.5, "medium"), textWidth(value, 12, "mono"))) + 8;
 
-/** Long bank descriptors are cut to keep labels short. */
-const clip = (s: string, n = 26) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
+/**
+ * The record a finding's label points at: the engine's anchor, except for a margin, whose label
+ * points at the first week it slipped (or the first one on screen).
+ */
+function labelAnchor(leak: FieldLeak, field: FieldData, wall: Wall) {
+  if (leak.type !== "MARGIN_EROSION" && leak.anchor && wall.pos.has(leak.anchor)) return leak.anchor;
+  const mine = new Set(leak.records);
+  return field.records.find((r) => mine.has(r.id) && wall.pos.has(r.id))?.id ?? null;
+}
 
 const TOUR_QUESTION = "Why was a Summit payment held?";
-
-const SEAM_STATUS: Record<string, string> = { held: "held", awaiting: "needs you", blocked: "blocked", released: "released", posted: "posted", flagged: "flagged" };
 
 interface Label {
   key: string;
@@ -159,14 +163,13 @@ interface Label {
   y: number;
   w: number;
   above: boolean;
-  kind: "leak" | "pin" | "note";
+  kind: "leak" | "pin";
   leak?: FieldLeak;
   title: string;
-  sub?: string;
   value?: string;
-  tone?: "found" | "signal" | "faint";
-  /** Where the leader starts, and that point now, for placing the label. */
-  from: import("./field-canvas").Anchor;
+  tone?: "found" | "signal";
+  /** Where the leader starts: the edge of the week's stack the label points into. */
+  from: Anchor;
   at: { x: number; y: number };
 }
 
@@ -201,8 +204,8 @@ export function Overview({ source }: { source: Source }) {
     return () => window.removeEventListener("resize", on);
   }, []);
   const narrow = width > 0 && width < 640;
-  // The field takes what the header, statement, system line, panel and key hints leave of the screen.
-  const g: Geometry | null = useMemo(() => (field && width ? layoutField(field, width, narrow, narrow ? 0 : Math.max(320, screenH - 500)) : null), [field, width, narrow, screenH]);
+  // The wall takes what the header, statement, system line, panel and key hints leave of the screen.
+  const wall: Wall | null = useMemo(() => (field && width ? layoutWall(field, width, narrow, narrow ? 330 : Math.max(300, screenH - 490)) : null), [field, width, narrow, screenH]);
 
   const run = useMemo(() => readRun(source.run, Date.now()), [source.run]);
   const running = Boolean(run?.running);
@@ -221,15 +224,15 @@ export function Overview({ source }: { source: Source }) {
   const leaks = useMemo(() => (field?.leaks ?? []).filter(isCredible), [field]);
   const open = useMemo(() => leaks.filter(isOpen), [leaks]);
 
-  // The run the trace shows: one started here, or the one behind the field.
+  // The run the trace shows: one started here, or the one behind the wall.
   const traced = source.run ?? source.shown;
   const expectModel = Boolean(field?.investigation?.model ?? dashboard?.latest?.aiModel);
   const expectLive = field?.investigation?.marketMode === "live";
   const trace = useMemo(() => readTrace(traced, { model: expectModel, live: expectLive }, now), [traced, expectModel, expectLive, now]);
   const tracedElapsed = traced ? ((traced.completedAt ?? (running ? now : traced.startedAt)) - traced.startedAt) : null;
 
-  // Which findings the field shows: none over the bare books (or while screening and asking,
-  // where the field is about other records); while an investigation runs, the ones it has
+  // Which findings the wall shows: none over the bare books (or while screening and asking,
+  // where the wall is about other records); while an investigation runs, the ones it has
   // measured so far; afterwards all of them, revealed one by one on arrival.
   const shown: FieldLeak[] = useMemo(() => {
     if (chapter === "books" || chapter === "screen" || chapter === "ask") return [];
@@ -294,60 +297,49 @@ export function Overview({ source }: { source: Source }) {
     });
   }, [chapter, latestAsk, field]);
 
-  // Payments the screen stopped sit at the seam past today, at their amount: every one while
-  // screening, and the ones an answer cites.
-  const seamItems = useMemo(() => {
+  // Payments the screen stopped wait at the gate past this week: every one while screening, and
+  // the ones an answer cites.
+  const gateItems = useMemo(() => {
     const items = feed?.items ?? [];
     if (chapter === "screen") return items.filter((i) => i.status === "held" || i.status === "awaiting" || i.status === "blocked").reverse();
     if (chapter === "ask") return items.filter((i) => cited.some((c) => c.screening === i.id));
     return [];
   }, [chapter, feed, cited]);
+  const gate = useMemo(() => (wall ? gateItems.map((item, i) => ({ item, x: wall.gateX, y: wall.base + wall.cell + i * wall.cell })) : []), [wall, gateItems]);
 
   const machine = useMemo(
     () => machineView({ chapter, field, trace, leaks, open, decision, feed, asks }),
     [chapter, field, trace, leaks, open, decision, feed, asks],
   );
 
-  // ---- Field tones ------------------------------------------------------------
+  // ---- Tones on the wall ------------------------------------------------------------
   const focusLeak = decision ?? (focus ? (leaks.find((l) => l.fingerprint === focus) ?? null) : null);
-  const domains = useMemo(() => (g && field ? focusDomains(g, chapter === "decide" || chapter === "investigate" ? focusLeak : null, field) : null), [g, field, focusLeak, chapter]);
-  const pos = useMemo(() => (g && domains ? place(g, domains) : null), [g, domains]);
-  const seam = useMemo(() => {
-    if (!g || !domains) return [];
-    const used = new Set<number>();
-    return seamItems.map((item) => {
-      let y = lineY(g, false, domains.out, item.amountCents);
-      while (used.has(Math.round(y))) y += g.cell;
-      used.add(Math.round(y));
-      return { item, x: g.seamX + g.size / 2, y };
-    });
-  }, [g, domains, seamItems]);
+  const pos = wall?.pos ?? null;
 
   const { tones, delays } = useMemo(() => {
     const tones = new Map<string, Tone>();
     const delays = new Map<string, number>();
-    if (!field || !g || !pos) return { tones, delays };
+    if (!field || !wall || !pos) return { tones, delays };
     if (running && chapter === "investigate") {
       for (const s of run!.suspects) {
         for (const id of suspectRecords(field, s)) {
           tones.set(id, TONE.suspect);
-          delays.set(id, (pos.get(id)?.col ?? 0) * 3);
+          delays.set(id, (pos.get(id)?.week ?? 0) * 24);
         }
       }
     }
+    // A finding spreads out from the record its label points at; an approval washes left to right.
     for (const leak of shown) {
-      const a = leak.anchor ? pos.get(leak.anchor) : undefined;
-      const ranked = leak.records
-        .map((id) => ({
-          id,
-          d: a ? Math.abs((pos.get(id)?.col ?? 0) - a.col) : 0,
-        }))
-        .sort((x, y) => x.d - y.d);
-      const stepMs = Math.min(40, 700 / Math.max(1, ranked.length));
-      ranked.forEach(({ id }, k) => {
-        tones.set(id, isFixed(leak) ? TONE.fixed : TONE.found);
-        delays.set(id, k * stepMs);
-      });
+      const fixed = isFixed(leak);
+      const spots = leak.records.map((id) => ({ id, p: pos.get(id) })).filter((x) => x.p);
+      const a = pos.get(labelAnchor(leak, field, wall!) ?? "") ?? spots[0]?.p;
+      const xs = spots.map((x) => x.p!.x);
+      const x0 = Math.min(...xs);
+      const span = Math.max(1, Math.max(...xs) - x0);
+      for (const { id, p } of spots) {
+        tones.set(id, fixed ? TONE.fixed : TONE.found);
+        delays.set(id, fixed ? ((p!.x - x0) / span) * 700 : a ? Math.min(900, Math.hypot(p!.x - a.x, p!.y - a.y) * 1.5) : 0);
+      }
     }
     if (focusLeak && chapter !== "ask") {
       const keep = new Set(focusLeak.records);
@@ -359,74 +351,49 @@ export function Overview({ source }: { source: Source }) {
       for (const r of field.records) tones.set(r.id, keep.has(r.id) ? TONE.cited : TONE.dim);
     }
     return { tones, delays };
-  }, [field, g, pos, shown, running, chapter, run, focusLeak, cited]);
+  }, [field, wall, pos, shown, running, chapter, run, focusLeak, cited]);
 
-  // ---- Labels on the field ------------------------------------------------------
+  // ---- Labels on the wall -------------------------------------------------------------
   const labels: Label[] = useMemo(() => {
-    if (!g || !field || !pos || !domains) return [];
+    if (!wall || !field || !pos) return [];
     const out: Label[] = [];
-    const center = (id: string | null | undefined) => {
+    // A label points into the week a record sits in, from above the wall or below it.
+    const edge = (id: string | null | undefined) => {
       const p = id ? pos.get(id) : undefined;
-      return p ? { x: p.x + g.size / 2, y: p.y + g.size / 2 } : null;
+      return p ? { x: p.x + wall.size / 2, y: stackEdge(wall, p.week, p.up), up: p.up } : null;
     };
     for (const leak of shown) {
       // A phone has room for one label: the finding in focus.
       if (focusLeak ? focusLeak.fingerprint !== leak.fingerprint : narrow) continue;
-      const at = center(leak.anchor);
-      if (!at || !leak.anchor) continue;
+      const at = edge(labelAnchor(leak, field, wall));
+      if (!at) continue;
       const value = isFixed(leak) ? "approved" : `${format(leak.annualCents)}${leak.oneTime ? " once" : " a year"}`;
       out.push({
         key: leak.fingerprint,
         x: at.x - 6,
         y: 0,
-        w: labelWidth(leak.kind, leak.subject, value),
-        above: at.y < g.axis,
+        w: labelWidth(leak.kind, value),
+        above: at.up,
         kind: "leak",
         leak,
         title: leak.kind,
-        sub: leak.subject,
         value,
         tone: isFixed(leak) ? "signal" : "found",
-        from: { id: leak.anchor },
+        from: { x: at.x, y: at.y },
         at,
       });
     }
     for (const c of cited) {
-      const stopped = c.screening ? seam.find((s) => s.item.id === c.screening) : undefined;
-      const at = stopped ? { x: stopped.x, y: stopped.y } : center(c.records[0]);
+      const stopped = c.screening ? gate.find((s) => s.item.id === c.screening) : undefined;
+      const at = stopped ? { x: stopped.x + wall.size / 2, y: wall.floor + 2, up: false } : edge(c.records[0]);
       if (!at) continue;
-      out.push({ key: `pin${c.n}`, x: at.x - 9, y: 0, w: 22, above: at.y < g.axis, kind: "pin", title: String(c.n), from: stopped ? at : { id: c.records[0] }, at });
-    }
-    // The competitor prices a finding rests on, beside today's column.
-    if (focusLeak && focusLeak.prices.length && shown.includes(focusLeak)) {
-      const cents = focusLeak.prices.map((p) => p.cents);
-      const at = { x: g.left + g.todayCol * g.cell + g.size / 2, y: lineY(g, true, domains.in, Math.max(...cents)) };
-      const title = `${cents.length} ${cents.length === 1 ? "competitor" : "competitors"}`;
-      const sub = cents.length === 1 ? format(cents[0]) : `${format(Math.min(...cents))} to ${format(Math.max(...cents))}`;
-      out.push({ key: "market", x: at.x - 10, y: 0, w: labelWidth(title, sub), above: true, kind: "note", title, sub, tone: "found", from: at, at });
-    }
-    if (chapter === "investigate" && running && run?.step === "market") {
-      const at = { x: g.left + g.todayCol * g.cell + g.size / 2, y: g.top + 8 };
-      const title = field.investigation?.marketMode === "live" ? "Apify" : "Market data";
-      out.push({
-        key: "market-step",
-        x: at.x - 10,
-        y: 0,
-        w: labelWidth(title, "reading competitor prices"),
-        above: true,
-        kind: "note",
-        title,
-        sub: "reading competitor prices",
-        tone: "found",
-        from: at,
-        at,
-      });
+      out.push({ key: `pin${c.n}`, x: at.x - 9, y: 0, w: 22, above: at.up, kind: "pin", title: String(c.n), from: { x: at.x, y: at.y }, at });
     }
     // Keep labels on each side apart, nudging left when they run out of room.
     const spread = (list: Label[], y: number) => {
       list.sort((a, b) => a.x - b.x);
       for (let i = 1; i < list.length; i++) list[i].x = Math.max(list[i].x, list[i - 1].x + list[i - 1].w + 16);
-      const over = list.length ? list[list.length - 1].x + list[list.length - 1].w - g.width : 0;
+      const over = list.length ? list[list.length - 1].x + list[list.length - 1].w - wall.width : 0;
       if (over > 0) {
         list[list.length - 1].x -= over;
         for (let i = list.length - 2; i >= 0; i--) list[i].x = Math.min(list[i].x, list[i + 1].x - list[i].w - 16);
@@ -438,75 +405,32 @@ export function Overview({ source }: { source: Source }) {
     };
     spread(
       out.filter((l) => l.above),
-      2,
+      4,
     );
     spread(
       out.filter((l) => !l.above),
-      g.bottom + 26,
+      wall.floor + 24,
     );
     return out;
-  }, [g, field, pos, domains, shown, cited, seam, focusLeak, chapter, running, run, narrow]);
+  }, [wall, field, pos, shown, cited, gate, focusLeak, narrow]);
 
   const leaders: Leader[] = useMemo(() => {
     const list: Leader[] = labels.map((l) => ({
       from: l.from,
       x1: Math.max(l.x + 2, Math.min(l.at.x, l.x + l.w - 2)),
-      y1: l.above ? l.y + (l.kind === "pin" ? 18 : l.kind === "note" ? 34 : 52) : l.y - 4,
+      y1: l.above ? l.y + (l.kind === "pin" ? 20 : 40) : l.y - 4,
       ink: l.kind === "pin" || l.tone === "signal" ? "signal" : "found",
-      strong: Boolean(l.leak && focusLeak?.fingerprint === l.leak.fingerprint),
+      strong: focusLeak ? Boolean(l.leak && focusLeak.fingerprint === l.leak.fingerprint) : undefined,
     }));
-    // One line from the stopped payments down to their list under the field.
-    if (g && chapter === "screen" && seam.length) {
-      const low = seam.reduce((a, b) => (b.y > a.y ? b : a));
-      list.push({ from: { x: low.x, y: low.y }, x1: low.x, y1: g.bottom + 21, ink: "found" });
-    }
     return list;
-  }, [labels, focusLeak, g, chapter, seam]);
+  }, [labels, focusLeak]);
 
-  const lastCol = g ? g.todayCol - 2 : 0;
-  const costs = useMemo(() => {
-    if (!g) return [];
-    return shown
-      .filter((l) => l.mark && focusLeak?.fingerprint === l.fingerprint)
-      .map((l) => ({
-        changeCol: Math.max(0, Math.floor((l.mark!.at - g.dayStart) / DAY)),
-        endCol: lastCol,
-        before: l.mark!.cents[0],
-        after: l.mark!.cents[1],
-        strong: focusLeak?.fingerprint === l.fingerprint,
-        label: l.mark!.label,
-      }));
-  }, [shown, g, focusLeak, lastCol]);
-  const prices = useMemo(() => (focusLeak && shown.includes(focusLeak) ? focusLeak.prices.map((p) => ({ cents: p.cents, strong: true })) : []), [shown, focusLeak]);
-
-  // Amount ticks at the left, following the scale as it zooms.
-  const ticks = useMemo(() => {
-    if (!g || !domains || narrow) return [];
-    const out: { key: string; y: number; label: string }[] = [];
-    for (const up of [true, false]) {
-      const range = up ? domains.in : domains.out;
-      const span = range[1] - range[0];
-      const steps =
-        span > 1.2 ? [1e3, 1e4, 1e5, 1e6] : span > 0.5 ? [1e3, 2e3, 5e3, 1e4, 2e4, 5e4, 1e5, 2e5, 5e5] : [1e3, 2e3, 3e3, 4e3, 5e3, 6e3, 8e3, 1e4, 1.2e4, 1.5e4, 2e4, 3e4, 5e4, 7.5e4, 1e5, 1.5e5, 2e5];
-      for (const cents of steps) {
-        const r = rowOf(g, range, Math.log10(cents));
-        if (r < 2.5 || r > g.rows - 1.5) continue;
-        out.push({
-          key: `${up}${cents}`,
-          y: yOf(g, up, Math.floor(r)) + g.size / 2 - 6,
-          label: cents >= 1e5 ? `$${cents / 1e5}k` : `$${cents / 100}`,
-        });
-      }
-    }
-    return out;
-  }, [g, domains, narrow]);
-
-  // New live payments drop into today's column.
+  // New live payments slide in from the bank feed: into this week, or to the gate.
   const seen = useRef<Set<string> | null>(null);
   const arrivals = useRef(new Map<string, number>());
   useEffect(() => {
     if (!field) return;
-    const live = field.records.filter((r) => r.live).map((r) => r.id);
+    const live = [...field.records.filter((r) => r.live).map((r) => r.id), ...(feed?.items ?? []).map((i) => i.id)];
     if (!seen.current) {
       seen.current = new Set(live);
       return;
@@ -517,24 +441,21 @@ export function Overview({ source }: { source: Source }) {
         arrivals.current.set(id, performance.now());
       }
     }
-  }, [field]);
+  }, [field, feed]);
 
   const introAt = useRef<number | null>(null);
-  if (introAt.current === null && typeof performance !== "undefined" && g) introAt.current = performance.now() + 150;
+  if (introAt.current === null && typeof performance !== "undefined" && wall) introAt.current = performance.now() + 150;
 
   const scene = useRef<Scene>({
     field: null,
-    g: null,
-    domains: null,
+    wall: null,
     tones: new Map(),
     delays: new Map(),
     recede: 0,
     introAt: null,
     scan: null,
     leaders: [],
-    costs: [],
-    prices: [],
-    waiting: [],
+    gate: null,
     hot: null,
     arrivals: arrivals.current,
     reduced: false,
@@ -549,17 +470,14 @@ export function Overview({ source }: { source: Source }) {
   }, [scanBand, runView?.step]);
   scene.current = {
     field,
-    g,
-    domains,
+    wall,
     tones,
     delays,
-    recede: chapter === "screen" ? 1 : shown.length || cited.length || (chapter === "investigate" && running && run!.suspects.length) ? 0.55 : 0,
+    recede: chapter === "screen" ? 0.75 : shown.length || cited.length || (chapter === "investigate" && running && run!.suspects.length) ? 0.55 : 0,
     introAt: introAt.current,
-    scan: scanBand ? { band: scanBand, startedAt: scanStart.current, period: 1100 } : null,
+    scan: scanBand ? { band: scanBand, startedAt: scanStart.current, period: 1400 } : null,
     leaders,
-    costs,
-    prices,
-    waiting: seam.map((s) => ({ id: s.item.id, status: s.item.status, y: s.y - (g?.size ?? 0) / 2 })),
+    gate: chapter === "screen" || gate.length ? gate.map((s) => ({ id: s.item.id, status: s.item.status, y: s.y })) : null,
     hot: hot?.id ?? null,
     arrivals: arrivals.current,
     reduced,
@@ -758,7 +676,7 @@ export function Overview({ source }: { source: Source }) {
       case "books":
         return {
           big: <>{records.toLocaleString("en-US")} records.</>,
-          small: `Six months of ${field.organizationName}, one square each.`,
+          small: "Six months of sales and bank lines. One square each, one column per week.",
         };
       case "investigate":
         if (runView?.failed)
@@ -806,11 +724,11 @@ export function Overview({ source }: { source: Source }) {
                   <Count cents={feed.stoppedCents} className="tabular text-found" /> stopped.
                 </>
               ),
-              small: feed.running ? `Screening ${feed.cursor} of ${feed.total}.` : "Before it posted.",
+              small: feed.running ? `Screening ${feed.cursor} of ${feed.total}.` : "Held at the gate before it posted.",
             }
           : {
               big: <>Every payment, screened.</>,
-              small: feed?.running ? `Screening ${feed.cursor} of ${feed.total}.` : "Before it posts.",
+              small: feed?.running ? `Screening ${feed.cursor} of ${feed.total}.` : "Payments arrive on the right. Anything odd waits at the gate.",
             };
       case "ask":
         return {
@@ -908,87 +826,52 @@ export function Overview({ source }: { source: Source }) {
 
           <div
             ref={box}
-            className="relative mt-2 select-none"
-            style={{ height: g?.height ?? 320 }}
+            className="relative mt-1 select-none"
+            style={{ height: wall?.height ?? 320 }}
             onPointerMove={(e) => {
-              if (!g || e.pointerType !== "mouse") return;
+              if (!wall || e.pointerType !== "mouse") return;
               const r = e.currentTarget.getBoundingClientRect();
               const x = e.clientX - r.left;
               const y = e.clientY - r.top;
-              const id = pos ? recordAt(g, pos, x, y) : null;
+              const id = recordAt(wall, x, y);
               setHot(id ? { id, x, y } : null);
             }}
             onPointerLeave={() => setHot(null)}
           >
             <FieldCanvas scene={scene} />
-            {g && !narrow && (
+            {wall && !narrow && (
               <>
-                <span className="label pointer-events-none absolute left-0 text-[10px] text-muted-foreground" style={{ top: g.axis - 13 }}>
+                <span className="label pointer-events-none absolute left-0 text-[10px] text-muted-foreground" style={{ top: wall.base - 13 }}>
                   in
                 </span>
-                <span className="label pointer-events-none absolute left-0 text-[10px] text-muted-foreground" style={{ top: g.axis + g.cell + 1 }}>
+                <span className="label pointer-events-none absolute left-0 text-[10px] text-muted-foreground" style={{ top: wall.base + wall.cell + 1 }}>
                   out
                 </span>
               </>
             )}
-            {g?.months.map((m) => (
-              <span key={m.x} className="label pointer-events-none absolute text-faint" style={{ left: m.x, top: g.bottom + 6 }}>
+            {wall?.months.map((m) => (
+              <span key={m.x} className="label pointer-events-none absolute whitespace-nowrap text-faint" style={{ left: m.x, top: wall.floor + 6 }}>
                 {m.label}
               </span>
             ))}
-            {g && (
-              <span
-                className="label pointer-events-none absolute -translate-x-1/2 text-faint"
-                style={{
-                  left: g.left + g.todayCol * g.cell + g.size / 2,
-                  top: g.bottom + 6,
-                }}
-              >
-                today
+            {wall && (
+              <span className="label pointer-events-none absolute -translate-x-full whitespace-nowrap text-faint" style={{ left: wall.right, top: wall.floor + 6 }}>
+                this week
               </span>
             )}
-            {g &&
-              domains &&
-              costs.map((c) => (
-                <span
-                  key={c.label}
-                  className={cn("halo pointer-events-none absolute font-mono text-[10.5px] text-found transition-[top,opacity] duration-500", !c.strong && "opacity-70")}
-                  style={{
-                    left: g.left + c.changeCol * g.cell + 6,
-                    top: lineY(g, true, domains.in, c.after) - 16,
-                  }}
-                >
-                  {c.label}
-                </span>
-              ))}
-            {ticks.map((t) => (
-              <span key={t.key} className="label pointer-events-none absolute left-0 text-[10px] text-faint transition-[top] duration-500" style={{ top: t.y }}>
-                {t.label}
-              </span>
-            ))}
             {labels.map((l) => (
               <FieldLabel key={l.key} label={l} focused={Boolean(l.leak && focusLeak?.fingerprint === l.leak.fingerprint)} onFocus={(f) => setFocus(f)} />
             ))}
-            {g && chapter === "screen" && seam.length > 0 && (
-              <div className="halo pointer-events-none absolute right-0 grid w-[400px] max-w-full grid-cols-1 gap-px font-mono text-[11px] leading-[15px]" style={{ top: g.bottom + 24 }}>
-                {seam.slice(-3).map(({ item }) => {
-                  const blocked = item.status === "blocked";
-                  return (
-                    <div key={item.id} className="animate-fade-up flex items-baseline gap-3">
-                      <span className={cn("w-[4.5rem] shrink-0", blocked ? "text-faint" : "text-found")}>{SEAM_STATUS[item.status]}</span>
-                      <span className={cn("min-w-0 truncate", blocked ? "text-faint line-through" : "text-muted-foreground")}>{clip(item.merchantName, 34)}</span>
-                      <span className="leader" />
-                      <span className={cn("tabular shrink-0 text-right", blocked && "text-faint")}>{format(item.amountCents)}</span>
-                    </div>
-                  );
-                })}
-              </div>
+            {wall && chapter === "screen" && (
+              <span className={cn("pointer-events-none absolute right-0 font-mono text-[10px] transition-colors", gate.some((s) => s.item.status !== "blocked") ? "text-found" : "text-muted-foreground")} style={{ top: wall.base - 13 }}>
+                gate
+              </span>
             )}
             {hotRecord && hot && (
               <div
                 className="pointer-events-none absolute z-10 whitespace-nowrap border border-border-strong bg-card px-2 py-1 font-mono text-[11px] shadow-sm"
                 style={{
-                  left: Math.min(hot.x + 14, (g?.width ?? 0) - 260),
+                  left: Math.max(0, Math.min(hot.x + 14, (wall?.width ?? 0) - 280)),
                   top: hot.y + 14,
                 }}
               >
@@ -1025,7 +908,6 @@ export function Overview({ source }: { source: Source }) {
                 started={Boolean(source.run)}
                 onInvestigate={investigate}
                 onFocus={setFocus}
-                focus={focus}
               />
             ) : chapter === "decide" ? (
               <DecidePanel
@@ -1033,7 +915,6 @@ export function Overview({ source }: { source: Source }) {
                 open={open}
                 decision={decision}
                 index={Math.min(cursor, Math.max(0, open.length - 1))}
-                forecast={dashboard?.forecast ?? null}
                 busy={busy}
                 onApprove={approve}
                 onReject={reject}
@@ -1056,7 +937,7 @@ export function Overview({ source }: { source: Source }) {
 
           <Hints hint={hint} className="mt-5 lg:hidden" />
         </main>
-        {details && <Details source={source} onClose={() => setDetails(false)} />}
+        {details && <Details source={source} trace={trace} elapsed={tracedElapsed} focus={focusLeak} onClose={() => setDetails(false)} />}
       </div>
     </div>
   );
@@ -1073,19 +954,15 @@ function FieldLabel({ label: l, focused, onFocus }: { label: Label; focused: boo
       </span>
     );
   }
-  const interactive = l.kind === "leak";
   return (
     <div
-      className={cn("halo absolute whitespace-nowrap animate-fade-up", interactive ? "cursor-default" : "pointer-events-none")}
+      className="halo absolute cursor-default whitespace-nowrap animate-fade-up"
       style={{ left: l.x, top: l.y }}
-      onPointerEnter={(e) => interactive && e.pointerType === "mouse" && onFocus(l.leak!.fingerprint)}
-      onPointerLeave={() => interactive && onFocus(null)}
+      onPointerEnter={(e) => e.pointerType === "mouse" && onFocus(l.leak!.fingerprint)}
+      onPointerLeave={() => onFocus(null)}
     >
-      <span className={cn("block text-[13.5px] font-medium leading-[18px] transition-colors", focused && (l.tone === "signal" ? "text-signal" : "text-found"), l.kind === "note" && "text-found")}>
-        {l.title}
-      </span>
-      {l.sub && <span className="block text-[12px] leading-snug text-faint">{l.sub}</span>}
-      {l.value && <span className={cn("mt-0.5 block font-mono text-[12px] tabular", l.tone === "signal" ? "text-signal" : "text-found")}>{l.value}</span>}
+      <span className={cn("block text-[13.5px] font-medium leading-[18px] transition-colors", focused && (l.tone === "signal" ? "text-signal" : "text-found"))}>{l.title}</span>
+      <span className={cn("mt-0.5 block font-mono text-[12px] tabular", l.tone === "signal" ? "text-signal" : "text-found")}>{l.value}</span>
     </div>
   );
 }

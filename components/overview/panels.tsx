@@ -4,13 +4,10 @@ import Link from "next/link";
 import { Fragment, useState } from "react";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ForecastChart } from "@/components/dashboard/forecast-chart";
-import type { CashForecast } from "@/lib/finance/forecast";
 import { format } from "@/lib/finance/money";
 import { isFixed, type FieldData, type FieldLeak } from "@/lib/field/model";
 import type { FixDraft } from "@/lib/investigation/drafts";
 import { cn } from "@/lib/utils/cn";
-import { withDecisions } from "./forecast";
 import type { Ask, Feed, FeedItem } from "./source";
 import { CHECKS, TOOLS, type TraceStep } from "./system";
 
@@ -81,9 +78,9 @@ export function BooksPanel({ field }: { field: FieldData }) {
   );
 }
 
-const ms = (n: number) => (n < 1000 ? `${Math.max(0, Math.round(n))}ms` : `${(n / 1000).toFixed(1)}s`);
+export const ms = (n: number) => (n < 1000 ? `${Math.max(0, Math.round(n))}ms` : `${(n / 1000).toFixed(1)}s`);
 
-const STEP_NODE: Record<TraceStep["status"], string> = {
+const STEP_FILL: Record<TraceStep["status"], string> = {
   pending: "border-border-strong",
   running: "cursor-blink border-foreground bg-foreground",
   done: "border-muted-foreground bg-muted-foreground",
@@ -91,40 +88,38 @@ const STEP_NODE: Record<TraceStep["status"], string> = {
   failed: "border-negative",
 };
 
-/** The run as the engine logged it: each step, the part that ran it, what it tested and what it found. */
-function Trace({ trace, elapsed }: { trace: TraceStep[]; elapsed: number | null }) {
+/** The engine's ten steps as ten squares: grey when done, orange when one turned up money. */
+function Steps({ trace, elapsed, running, found }: { trace: TraceStep[]; elapsed: number | null; running: boolean; found: number }) {
+  // Between two steps, the line stays on the one that just finished.
+  const active = trace.find((t) => t.status === "running") ?? (running ? trace.findLast((t) => t.status !== "pending") : undefined);
+  const n = trace.findIndex((t) => t === active) + 1;
+  const ran = trace.some((t) => t.status !== "pending");
   return (
     <div className="min-w-0">
-      <div className="mb-1 flex items-baseline gap-3 font-mono text-[11px] text-faint">
-        <span>engine trace</span>
-        <span className="leader" />
-        {elapsed !== null && <span className="tabular">{ms(elapsed)}</span>}
-      </div>
-      <ol className="font-mono text-[11px] leading-[17px]">
-        {trace.map((t, i) => (
+      <ol className="flex gap-1.5" aria-label="Engine steps">
+        {trace.map((t) => (
           <li
             key={t.key}
-            title={t.message || undefined}
-            className={cn(
-              "grid grid-cols-[1.3rem_3.7rem_minmax(0,7.5rem)_minmax(0,1fr)] items-baseline gap-x-2 sm:grid-cols-[1.3rem_3.7rem_8.2rem_minmax(0,14.5rem)_minmax(0,1fr)_3rem]",
-              t.status === "pending" ? "text-faint" : t.status === "running" ? "text-foreground" : "text-muted-foreground",
-            )}
-          >
-            <span className="tabular text-faint">{String(i + 1).padStart(2, "0")}</span>
-            <span className="flex items-center gap-1.5">
-              <span aria-hidden className={cn("size-[7px] shrink-0 border transition-colors duration-300", STEP_NODE[t.status])} />
-              {t.who}
-            </span>
-            <span className="truncate">{STEP_NAMES[t.key]}</span>
-            <span className="hidden truncate text-faint sm:block">{t.check}</span>
-            <span className={cn("truncate", t.found && "text-found", t.status === "failed" && "text-negative")}>
-              {t.result}
-              {t.status === "running" && <span className="cursor-blink text-signal">_</span>}
-            </span>
-            <span className="hidden text-right tabular text-faint sm:block">{t.ms !== null && (t.status === "done" || t.status === "warning") ? ms(t.ms) : ""}</span>
-          </li>
+            title={`${STEP_NAMES[t.key]} · ${t.who}${t.result ? ` · ${t.result}` : ""}`}
+            className={cn("size-3.5 border transition-colors duration-300", t.found ? "border-found bg-found" : STEP_FILL[t.status])}
+          />
         ))}
       </ol>
+      <p className="mt-2.5 truncate font-mono text-[12px] text-muted-foreground">
+        {active ? (
+          <>
+            <span className="tabular text-faint">{String(n).padStart(2, "0")}/10</span> <span className="text-foreground">{active.who}</span> · {STEP_NAMES[active.key]}
+            {active.result && ` · ${active.result}`}
+            {active.status === "running" && <span className="cursor-blink text-signal">_</span>}
+          </>
+        ) : ran && !running ? (
+          <>
+            10 steps · <span className="tabular">{elapsed !== null ? ms(elapsed) : ""}</span> · {found} {found === 1 ? "leak" : "leaks"} measured to the cent
+          </>
+        ) : (
+          "Ten steps, from reading the books to drafting fixes."
+        )}
+      </p>
     </div>
   );
 }
@@ -139,7 +134,6 @@ export function InvestigatePanel({
   started,
   onInvestigate,
   onFocus,
-  focus,
 }: {
   trace: TraceStep[];
   elapsed: number | null;
@@ -150,54 +144,41 @@ export function InvestigatePanel({
   started: boolean;
   onInvestigate: () => void;
   onFocus: (fingerprint: string | null) => void;
-  focus: string | null;
 }) {
   return (
-    <div className="grid grid-cols-1 gap-x-10 gap-y-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-      <Trace trace={trace} elapsed={elapsed} />
-      <div className="flex min-w-0 flex-col items-start gap-4">
-        <div className="w-full">
-          <div className="mb-1 flex items-baseline gap-3 font-mono text-[11px] text-faint">
-            <span>found</span>
-            <span className="leader" />
-            <span className="tabular">{leaks.length}</span>
-          </div>
-          {leaks.length > 0 ? (
-            <ul>
-              {leaks.map((l) => (
-                <li key={l.fingerprint} className="animate-fade-up border-b last:border-b-0" onPointerEnter={() => onFocus(l.fingerprint)} onPointerLeave={() => onFocus(null)}>
-                  <div className="flex items-baseline gap-3 py-1.5">
-                    <span className="shrink-0 text-[14px] font-medium">{l.kind}</span>
-                    <span className="truncate text-[13px] text-faint">{l.subject}</span>
-                    <span className="leader" />
-                    <span className={cn("shrink-0 font-mono text-[13px] tabular", isFixed(l) ? "text-signal" : "text-found")}>
-                      {format(l.annualCents)}
-                      <span className="text-faint">{l.oneTime ? " once" : "/yr"}</span>
-                    </span>
-                  </div>
-                  {focus === l.fingerprint && (
-                    <ul className="grid gap-1 pb-2.5 font-mono text-[11px] leading-[15px] text-muted-foreground">
-                      {l.evidence.map((line) => (
-                        <li key={line} className="animate-fade-up">
-                          {line}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="py-1.5 font-mono text-[11px] text-faint">{running ? "nothing measured yet" : "nothing found yet"}</p>
-          )}
-          {!running && leaks.length > 0 && leaks.length < total && <p className="mt-1 font-mono text-[11px] text-faint">measuring…</p>}
-        </div>
+    <div className="grid grid-cols-1 gap-x-12 gap-y-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="flex min-w-0 flex-col items-start gap-5">
+        <Steps trace={trace} elapsed={elapsed} running={running} found={total} />
         <Button size="lg" onClick={onInvestigate} disabled={busy || running}>
           {running ? "Investigating" : started ? "Investigate again" : "Investigate"}
           <span aria-hidden className="text-[11px] opacity-60">
             ↵
           </span>
         </Button>
+      </div>
+      <div className="min-w-0">
+        {leaks.length > 0 ? (
+          <ul>
+            {leaks.map((l) => (
+              <li
+                key={l.fingerprint}
+                className="animate-fade-up flex items-baseline gap-3 border-b py-1.5 last:border-b-0"
+                onPointerEnter={() => onFocus(l.fingerprint)}
+                onPointerLeave={() => onFocus(null)}
+              >
+                <span className="shrink-0 text-[14px] font-medium">{l.kind}</span>
+                <span className="truncate text-[13px] text-faint">{l.subject}</span>
+                <span className="leader" />
+                <span className={cn("shrink-0 font-mono text-[13px] tabular", isFixed(l) ? "text-signal" : "text-found")}>
+                  {format(l.annualCents)}
+                  <span className="text-faint">{l.oneTime ? " once" : "/yr"}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="py-1.5 font-mono text-[12px] text-faint">{running ? "nothing measured yet" : "nothing found yet"}</p>
+        )}
       </div>
     </div>
   );
@@ -231,7 +212,6 @@ export function DecidePanel({
   open,
   decision,
   index,
-  forecast,
   busy,
   onApprove,
   onReject,
@@ -241,95 +221,68 @@ export function DecidePanel({
   open: FieldLeak[];
   decision: FieldLeak | null;
   index: number;
-  forecast: CashForecast | null;
   busy: string | null;
   onApprove: (l: FieldLeak) => void;
   onReject: (l: FieldLeak) => void;
   onSkip: () => void;
 }) {
-  const projected = forecast ? withDecisions(forecast, leaks) : null;
+  if (!decision) {
+    return (
+      <div className="animate-fade-up max-w-xl">
+        <p className="label">every fix decided</p>
+        <ul className="mt-3">
+          {leaks.map((l) => (
+            <li key={l.fingerprint} className="flex items-baseline gap-3 border-b py-2 last:border-b-0">
+              <span className="text-[14px] font-medium">{l.kind}</span>
+              <span className="truncate text-[13px] text-faint">{l.subject}</span>
+              <span className="leader" />
+              <span className={cn("font-mono text-[12px]", isFixed(l) ? "text-signal" : "text-faint")}>{isFixed(l) ? "approved" : "not yet"}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+  const fixed = isFixed(decision);
   return (
-    <div className={cn("grid grid-cols-1 gap-x-10 gap-y-6 lg:grid-cols-[minmax(0,1fr)_300px]", decision && "xl:grid-cols-[minmax(0,1fr)_300px_250px]")}>
+    <div key={decision.fingerprint} className="animate-fade-up grid grid-cols-1 gap-x-12 gap-y-4 sm:grid-cols-[minmax(0,1fr)_auto]">
       <div className="min-w-0 max-w-2xl">
-        {decision ? (
-          <div key={decision.fingerprint} className="animate-fade-up">
-            <p className="label">
-              {isFixed(decision) ? "approved" : `${index + 1} of ${open.length}`} · {decision.kind.toLowerCase()} · {decision.subject}
-            </p>
-            <h2 className="mt-1 text-[19px] font-medium tracking-[-0.01em]">{decision.recommendationTitle}</h2>
-            <div className="mt-3">{decision.fix ? <Draft fix={decision.fix} /> : <p className="text-[13px] text-muted-foreground">{decision.title}</p>}</div>
-            {isFixed(decision) ? (
-              <p className="animate-stamp mt-4 inline-flex h-9 items-center gap-2 border border-signal px-3 font-mono text-[12px] text-signal">approved · ready for you to send</p>
-            ) : (
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                <Button disabled={busy !== null} onClick={() => onApprove(decision)}>
-                  Approve <span className="text-[11px] opacity-60">↵</span>
-                </Button>
-                <Button variant="outline" disabled={busy !== null} onClick={onSkip}>
-                  {index < open.length - 1 ? "Next" : "Later"} <span className="text-[11px] opacity-60">→</span>
-                </Button>
-                <Button variant="ghost" disabled={busy !== null} onClick={() => onReject(decision)}>
-                  Reject
-                </Button>
-                <span className="ml-2 font-mono text-[11px] text-faint">LedgerLens drafts it. You send it.</span>
-              </div>
-            )}
+        <p className="label">
+          {fixed ? "approved" : `${index + 1} of ${open.length}`} · {decision.kind.toLowerCase()} · {decision.subject}
+        </p>
+        <h2 className="mt-1 text-[19px] font-medium tracking-[-0.01em]">{decision.recommendationTitle}</h2>
+        <ul className="mt-1.5 grid gap-0.5 font-mono text-[11.5px] leading-[16px] text-muted-foreground">
+          {decision.evidence.slice(0, 2).map((line) => (
+            <li key={line} className="truncate">
+              {line}
+            </li>
+          ))}
+        </ul>
+        {decision.fix && (
+          <div className="mt-3">
+            <Draft fix={decision.fix} />
           </div>
+        )}
+        {fixed ? (
+          <p className="animate-stamp mt-4 inline-flex h-9 items-center gap-2 border border-signal px-3 font-mono text-[12px] text-signal">approved · ready for you to send</p>
         ) : (
-          <div className="animate-fade-up">
-            <p className="label">every fix decided</p>
-            <ul className="mt-3 max-w-xl">
-              {leaks.map((l) => (
-                <li key={l.fingerprint} className="flex items-baseline gap-3 border-b py-2 last:border-b-0">
-                  <span className="text-[14px] font-medium">{l.kind}</span>
-                  <span className="truncate text-[13px] text-faint">{l.subject}</span>
-                  <span className="leader" />
-                  <span className={cn("font-mono text-[12px]", isFixed(l) ? "text-signal" : "text-faint")}>{isFixed(l) ? "approved" : "not yet"}</span>
-                </li>
-              ))}
-            </ul>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <Button disabled={busy !== null} onClick={() => onApprove(decision)}>
+              Approve <span className="text-[11px] opacity-60">↵</span>
+            </Button>
+            <Button variant="outline" disabled={busy !== null} onClick={onSkip}>
+              {index < open.length - 1 ? "Next" : "Later"} <span className="text-[11px] opacity-60">→</span>
+            </Button>
+            <Button variant="ghost" disabled={busy !== null} onClick={() => onReject(decision)}>
+              Reject
+            </Button>
+            <span className="ml-2 hidden font-mono text-[11px] text-faint md:inline">LedgerLens drafts it. You send it.</span>
           </div>
         )}
       </div>
-      {decision && <Proof leak={decision} />}
-      {projected && (
-        <aside className={cn(decision && "lg:hidden xl:block")}>
-          <p className="label mb-3">cash, next 90 days</p>
-          <ForecastChart forecast={projected} />
-        </aside>
-      )}
-    </div>
-  );
-}
-
-// A long derivation keeps the lines that carry it; the rest stay in the finding's evidence.
-const MINOR_ROWS = new Set(["Cost absorbed per month", "Gap to median", "Monthly upside", "Annual upside"]);
-
-/** The arithmetic behind the amount, as the engine computed it. Hover a line for its formula. */
-function Proof({ leak }: { leak: FieldLeak }) {
-  const rows = leak.calculations.length > 7 ? leak.calculations.filter((c) => !MINOR_ROWS.has(c.label)) : leak.calculations;
-  if (!rows.length) return null;
-  return (
-    <div key={leak.fingerprint} className="min-w-0">
-      <div className="mb-1.5 flex items-baseline gap-3 font-mono text-[11px] text-faint">
-        <span>the math</span>
-        <span className="leader" />
-        <span>rules · cents</span>
-      </div>
-      <dl className="grid grid-cols-1 gap-[3px] font-mono text-[11px] leading-[15px]">
-        {rows.map((c, i) => {
-          const last = i === rows.length - 1;
-          return (
-            <div key={c.label} title={`${c.label}: ${c.formula}`} className="animate-fade-up flex items-baseline gap-2" style={{ animationDelay: `${120 + i * 70}ms` }}>
-              <dt className={cn("min-w-0 truncate", last ? "text-foreground" : "text-muted-foreground")}>{c.label}</dt>
-              <span className="leader" />
-              <dd className={cn("shrink-0 tabular", last ? (isFixed(leak) ? "text-signal" : "text-found") : "text-foreground")}>{c.result}</dd>
-            </div>
-          );
-        })}
-      </dl>
-      <p className="animate-fade-up mt-1.5 font-mono text-[10.5px] leading-[14px] text-faint" style={{ animationDelay: `${120 + rows.length * 70}ms` }}>
-        = {rows.at(-1)!.formula}
+      <p className="sm:text-right">
+        <span className={cn("display block text-[38px] leading-none tabular transition-colors duration-500", fixed ? "text-signal" : "text-found")}>{format(decision.annualCents)}</span>
+        <span className="mt-1.5 block font-mono text-[11px] text-faint">{fixed ? "recovered" : decision.oneTime ? "once" : "a year"}</span>
       </p>
     </div>
   );
@@ -346,131 +299,70 @@ const STATUS: Record<FeedItem["status"], { label: string; className: string }> =
 
 const clock = (ms: number) => new Date(ms).toLocaleTimeString("en-US", { hour12: false });
 
-const VERDICT_FILL: Record<FeedItem["verdict"], string> = { hold: "bg-found", review: "bg-warning", clear: "bg-muted-foreground" };
-
-/** A payment's risk score as the checks that built it, against the flag and hold lines. */
-function ScoreBar({ item, policy }: { item: FeedItem; policy: Feed["policy"] }) {
-  let x = 0;
-  return (
-    <span className="flex items-center gap-2" title={`risk ${item.score.toFixed(2)} · flags at ${policy.reviewAt.toFixed(2)} · holds at ${policy.holdAt.toFixed(2)}`}>
-      <span className="relative h-[7px] w-[84px] shrink-0 bg-border">
-        {item.signals.map((sig, i) => {
-          const left = x;
-          const w = Math.max(0, Math.min(sig.weight, 1 - x));
-          x += w;
-          return w > 0 ? (
-            <span
-              key={sig.signal}
-              className={cn("animate-grow absolute inset-y-0 origin-left", VERDICT_FILL[item.verdict], i % 2 === 1 && "opacity-75")}
-              style={{ left: `${left * 100}%`, width: `calc(${w * 100}% - 1px)`, animationDelay: `${i * 110}ms` }}
-            />
-          ) : null;
-        })}
-        <span aria-hidden className="absolute -inset-y-[3px] w-px bg-faint" style={{ left: `${policy.reviewAt * 100}%` }} />
-        <span aria-hidden className="absolute -inset-y-[3px] w-px bg-foreground" style={{ left: `${policy.holdAt * 100}%` }} />
-      </span>
-      <span className={cn("font-mono text-[11px] tabular", item.verdict === "hold" ? "text-found" : item.verdict === "review" ? "text-warning" : "text-faint")}>{item.score.toFixed(2)}</span>
-    </span>
-  );
-}
-
 export function ScreenPanel({ feed, busy, onStart, onDecide }: { feed: Feed | null | undefined; busy: string | null; onStart: () => void; onDecide: (id: string, d: "release" | "block") => void }) {
   const items = feed?.items ?? [];
   const waiting = items.filter((i) => i.status === "held" || i.status === "awaiting");
-  // One payment to decide at a time, the one waiting longest; the rest of the feed is a log.
+  // One payment to decide at a time, the one waiting longest; the rest of the feed is a short log.
   const first = waiting.at(-1);
-  const rows = [...(first ? [first] : []), ...items.filter((i) => i !== first)].slice(0, first ? 3 : 4);
-  // The checks light for the payment just screened, then for the one in front of you.
-  const current = feed?.running ? items[0] : (first ?? items[0]);
+  const log = items.filter((i) => i !== first).slice(0, first ? 2 : 4);
   return (
-    <div className="grid grid-cols-1 gap-x-10 gap-y-6 lg:grid-cols-[minmax(0,1fr)_250px]">
-      <div className="min-w-0 max-w-3xl">
-        {rows.length === 0 ? (
-          <p className="font-mono text-[13px] text-muted-foreground">The next ten payments from the bank feed, each screened the moment it arrives.</p>
-        ) : (
-          <ol>
-            {rows.map((item) => {
-              const s = STATUS[item.status];
-              const open = item === first;
-              return (
-                <li
-                  key={item.id}
-                  className={cn(
-                    "animate-fade-up grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 border-b py-2 last:border-b-0 sm:grid-cols-[4.5rem_minmax(0,1fr)_7.5rem_auto]",
-                    item.status === "blocked" && "opacity-60",
-                  )}
-                >
-                  <span className="hidden pt-0.5 font-mono text-[11px] text-faint sm:block">{clock(item.at)}</span>
-                  <div className="min-w-0">
-                    <div className="flex items-baseline gap-x-3">
-                      <span className={cn("truncate text-[14px]", item.status === "blocked" && "line-through")}>{item.merchantName}</span>
-                      {item.invoiceReference && <span className="hidden font-mono text-[11px] text-faint md:inline">{item.invoiceReference}</span>}
-                      <span className={cn("shrink-0 font-mono text-[11px]", s.className)}>{s.label}</span>
-                    </div>
-                    {open && (
-                      <>
-                        <ul className="mt-1 grid gap-0.5 font-mono text-[11.5px] text-muted-foreground">
-                          {item.signals.slice(0, 3).map((sig) => (
-                            <li key={sig.signal} className="flex gap-2">
-                              <span className="tabular w-9 shrink-0 text-faint">+{sig.weight.toFixed(2)}</span>
-                              <span className="min-w-0">{sig.detail}</span>
-                            </li>
-                          ))}
-                          {item.status === "awaiting" && feed && <li className="text-faint">above your {format(feed.policy.approvalLimitCents)} limit</li>}
-                        </ul>
-                        <div className="mt-2 flex gap-2">
-                          <Button size="sm" disabled={busy !== null} onClick={() => onDecide(item.id, "block")}>
-                            Block <kbd className="text-[10px] opacity-60">b</kbd>
-                          </Button>
-                          <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => onDecide(item.id, "release")}>
-                            Release <kbd className="text-[10px] opacity-60">r</kbd>
-                          </Button>
-                          {waiting.length > 1 && <span className="self-center pl-2 font-mono text-[11px] text-faint">{waiting.length - 1} more waiting</span>}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                  <span className="hidden pt-1 sm:block">{feed && <ScoreBar item={item} policy={feed.policy} />}</span>
-                  <span className={cn("figure tabular text-[14px]", item.transactionType === "CREDIT" && "text-signal")}>
-                    {item.transactionType === "CREDIT" ? "+" : ""}
-                    {format(item.amountCents)}
-                  </span>
+    <div className="grid grid-cols-1 gap-x-12 gap-y-5 lg:grid-cols-[minmax(0,1fr)_auto]">
+      <div className="min-w-0 max-w-2xl">
+        {items.length === 0 && <p className="font-mono text-[13px] text-muted-foreground">The next ten payments from the bank feed, each screened the moment it arrives.</p>}
+        {first && (
+          <div key={first.id} className="animate-fade-up mb-3">
+            <div className="flex items-baseline gap-3">
+              <span className="shrink-0 font-mono text-[11px] text-found">{STATUS[first.status].label}</span>
+              <span className="truncate text-[17px] font-medium">{first.merchantName}</span>
+              <span className="leader" />
+              <span className="figure shrink-0 text-[17px] tabular">{format(first.amountCents)}</span>
+            </div>
+            <ul className="mt-1 grid gap-0.5 font-mono text-[11.5px] leading-[16px] text-muted-foreground">
+              {first.signals.slice(0, 2).map((sig) => (
+                <li key={sig.signal} className="truncate">
+                  {sig.detail}
                 </li>
-              );
-            })}
+              ))}
+              {first.status === "awaiting" && feed && <li className="text-faint">above your {format(feed.policy.approvalLimitCents)} limit</li>}
+            </ul>
+            <div className="mt-2.5 flex items-center gap-2">
+              <Button size="sm" disabled={busy !== null} onClick={() => onDecide(first.id, "block")}>
+                Block <kbd className="text-[10px] opacity-60">b</kbd>
+              </Button>
+              <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => onDecide(first.id, "release")}>
+                Release <kbd className="text-[10px] opacity-60">r</kbd>
+              </Button>
+              {waiting.length > 1 && <span className="pl-2 font-mono text-[11px] text-faint">{waiting.length - 1} more waiting</span>}
+            </div>
+          </div>
+        )}
+        {log.length > 0 && (
+          <ol className="grid grid-cols-1 font-mono text-[11.5px] leading-[20px]">
+            {log.map((item) => (
+              <li key={item.id} className={cn("animate-fade-up flex items-baseline gap-3", item.status === "blocked" && "opacity-60")}>
+                <span className="hidden w-[4.2rem] shrink-0 text-faint sm:block">{clock(item.at)}</span>
+                <span className={cn("min-w-0 truncate text-muted-foreground", item.status === "blocked" && "line-through")}>{item.merchantName}</span>
+                <span className="leader" />
+                <span className={cn("shrink-0", STATUS[item.status].className)}>{STATUS[item.status].label}</span>
+                <span className={cn("w-[5.5rem] shrink-0 text-right tabular", item.transactionType === "CREDIT" && "text-signal")}>
+                  {item.transactionType === "CREDIT" ? "+" : ""}
+                  {format(item.amountCents)}
+                </span>
+              </li>
+            ))}
           </ol>
         )}
       </div>
-      <aside className="grid content-start gap-3">
-        {feed && (
-          <div>
-            <div className="mb-1.5 flex items-baseline gap-3 font-mono text-[11px] text-faint">
-              <span>checks on every payment</span>
-              <span className="leader" />
-            </div>
-            <ul className="grid grid-cols-1 gap-[3px] font-mono text-[11px] leading-[15px]">
-              {CHECKS.map((c) => {
-                const hit = current?.signals.find((sig) => sig.signal === c.signal);
-                return (
-                  <li key={c.signal} className={cn("flex items-baseline gap-2 transition-colors duration-300", hit ? "text-foreground" : "text-faint")}>
-                    <span className="truncate">{c.name}</span>
-                    <span className="leader" />
-                    <span className={cn("tabular", hit && current && (current.verdict === "hold" ? "text-found" : current.verdict === "review" ? "text-warning" : "text-foreground"))}>
-                      +{(hit?.weight ?? c.weight).toFixed(2)}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-            <p className="mt-2 border-t pt-2 font-mono text-[11px] leading-[15px] text-muted-foreground" title={`Clear payments over ${format(feed.policy.approvalLimitCents)} also wait for you`}>
-              holds at <span className="tabular text-foreground">{feed.policy.holdAt.toFixed(2)}</span> · flags at <span className="tabular text-foreground">{feed.policy.reviewAt.toFixed(2)}</span>
-            </p>
-          </div>
-        )}
-        <Button size="lg" className="justify-self-start" variant={items.length ? "outline" : "default"} disabled={busy !== null || Boolean(feed?.running) || !feed} onClick={onStart}>
+      <aside className="flex flex-col items-start gap-2.5">
+        <Button size="lg" variant={items.length ? "outline" : "default"} disabled={busy !== null || Boolean(feed?.running) || !feed} onClick={onStart}>
           {feed?.running ? `Screening ${feed.cursor}/${feed.total}` : items.length ? "Replay the feed" : "Start the feed"}
           {!feed?.running && <span className="text-[11px] opacity-60">↵</span>}
         </Button>
+        {feed && (
+          <p className="font-mono text-[11px] text-faint" title={`Clear payments over ${format(feed.policy.approvalLimitCents)} also wait for you`}>
+            {CHECKS.length} checks a payment · holds at {feed.policy.holdAt.toFixed(2)}
+          </p>
+        )}
       </aside>
     </div>
   );
@@ -548,28 +440,13 @@ export function AskPanel({ asks, busy, onAsk }: { asks: Ask[] | undefined; busy:
           </div>
         )}
       </div>
-      <div className="min-w-0">{latest?.answer || latest?.status === "failed" ? <Answer ask={latest} /> : <Tools used={latest?.steps.map((s) => s.tool) ?? []} />}</div>
-    </div>
-  );
-}
-
-/** What the agent can reach: read-only tools that compute in code and return cited records. */
-function Tools({ used }: { used: string[] }) {
-  return (
-    <div className="animate-fade-up">
-      <div className="mb-1.5 flex items-baseline gap-3 font-mono text-[11px] text-faint">
-        <span>the agent&apos;s tools</span>
-        <span className="leader" />
-        <span>read-only · sums in code</span>
+      <div className="min-w-0">
+        {latest?.answer || latest?.status === "failed" ? (
+          <Answer ask={latest} />
+        ) : (
+          !thinking && <p className="pt-1 font-mono text-[12px] leading-[18px] text-faint">Claude answers with {TOOLS.length} read-only tools. Sums are done in code, and every figure is traced to a record.</p>
+        )}
       </div>
-      <ul className="grid grid-cols-1 gap-x-6 gap-y-[3px] font-mono text-[11px] leading-[15px] sm:grid-cols-2">
-        {TOOLS.map((t) => (
-          <li key={t} className={cn("transition-colors duration-300", used.includes(t) ? "text-signal" : "text-faint")}>
-            {t}
-            <span className="text-faint">()</span>
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }
