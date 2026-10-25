@@ -1,0 +1,183 @@
+{
+  "$description": "Read from https://www.figma.com/design/9V6201C7apk3N3VObf6opa at 2026-10-25T10:34:00Z",
+  "color": {
+    "paper": {
+      "$type": "color",
+      "$value": "#f6f4ee",
+      "$extensions": {
+        "figma": {
+          "variable": "color/paper",
+          "alias": "pigment/paper"
+        }
+      }
+    },
+    "surface": {
+      "$type": "color",
+      "$value": "#fafaf8",
+      "$extensions": {
+        "figma": {
+          "variable": "color/surface",
+          "alias": "pigment/surface"
+        }
+      }
+    },
+    "ink": {
+      "$type": "color",
+      "$value": "#111111",
+      "$extensions": {
+        "figma": {
+          "variable": "color/ink",
+          "alias": "pigment/ink"
+        }
+      }
+    },
+    "muted": {
+      "$type": "color",
+      "$value": "#62625c",
+      "$extensions": {
+        "figma": {
+          "variable": "color/muted",
+          "alias": "pigment/muted"
+        }
+      }
+    },
+    "blue": {
+      "$type": "color",
+      "$value": "#1662e6",
+      "$extensions": {
+        "figma": {
+          "variable": "color/blue",
+          "alias": "pigment/blue"
+        }
+      }
+    },
+    "orange": {
+      "$type": "color",
+      "$value": "#a7470e",
+      "$extensions": {
+        "figma": {
+          "variable": "color/orange",
+          "alias": "pigment/orange"
+        }
+      }
+    },
+    "line": {
+      "$type": "color",
+      "$value": "#d9d7d0",
+      "$extensions": {
+        "figma": {
+          "variable": "color/line",
+          "alias": "pigment/line"
+        }
+      }
+    },
+    "soft": {
+      "$type": "color",
+      "$value": "#e9eefb",
+      "$extensions": {
+        "figma": {
+          "variable": "color/soft",
+          "alias": "pigment/soft"
+        }
+      }
+    }
+  },
+  "space": {
+    "16": {
+      "$type": "dimension",
+      "$value": "16px",
+      "$extensions": {
+        "figma": {
+          "variable": "space-16"
+        }
+      }
+    },
+    "24": {
+      "$type": "dimension",
+      "$value": "24px",
+      "$extensions": {
+        "figma": {
+          "variable": "space-24"
+        }
+      }
+    },
+    "32": {
+      "$type": "dimension",
+      "$value": "32px",
+      "$extensions": {
+        "figma": {
+          "variable": "space-32"
+        }
+      }
+    }
+  },
+  "radius": {
+    "default": {
+      "$type": "dimension",
+      "$value": "4px",
+      "$extensions": {
+        "figma": {
+          "variable": "radius"
+        }
+      }
+    }
+  },
+  "type": {
+    "title": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "Geist",
+        "fontWeight": 500,
+        "fontSize": "62px",
+        "lineHeight": 1.25
+      },
+      "$extensions": {
+        "figma": {
+          "textStyle": "LedgerLens/title"
+        }
+      }
+    },
+    "heading": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "Geist",
+        "fontWeight": 500,
+        "fontSize": "30px",
+        "lineHeight": 1.25
+      },
+      "$extensions": {
+        "figma": {
+          "textStyle": "LedgerLens/heading"
+        }
+      }
+    },
+    "body": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "Geist",
+        "fontWeight": 400,
+        "fontSize": "20px",
+        "lineHeight": 1.25
+      },
+      "$extensions": {
+        "figma": {
+          "textStyle": "LedgerLens/body"
+        }
+      }
+    },
+    "label": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "Geist Mono",
+        "fontWeight": 400,
+        "fontSize": "15px",
+        "lineHeight": 1.25
+      },
+      "$extensions": {
+        "figma": {
+          "textStyle": "LedgerLens/label"
+        }
+      }
+    }
+  }
+}

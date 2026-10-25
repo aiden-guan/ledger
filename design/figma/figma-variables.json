@@ -1,0 +1,43 @@
+{
+  "source": "https://www.figma.com/design/9V6201C7apk3N3VObf6opa",
+  "readVia": "Figma MCP use_figma: figma.variables.getLocalVariableCollectionsAsync()",
+  "readAt": "2026-10-25T10:34:00Z",
+  "collections": [
+    {
+      "name": "LedgerLens / primitives",
+      "vars": [
+        { "name": "pigment/paper", "type": "COLOR", "value": { "r": 0.9647058844566345, "g": 0.95686274766922, "b": 0.9333333373069763, "a": 1 } },
+        { "name": "pigment/surface", "type": "COLOR", "value": { "r": 0.9803921580314636, "g": 0.9803921580314636, "b": 0.9725490212440491, "a": 1 } },
+        { "name": "pigment/ink", "type": "COLOR", "value": { "r": 0.06666667014360428, "g": 0.06666667014360428, "b": 0.06666667014360428, "a": 1 } },
+        { "name": "pigment/muted", "type": "COLOR", "value": { "r": 0.3843137323856354, "g": 0.3843137323856354, "b": 0.3607843220233917, "a": 1 } },
+        { "name": "pigment/blue", "type": "COLOR", "value": { "r": 0.08627451211214066, "g": 0.3843137323856354, "b": 0.9019607901573181, "a": 1 } },
+        { "name": "pigment/orange", "type": "COLOR", "value": { "r": 0.6549019813537598, "g": 0.27843138575553894, "b": 0.054901961237192154, "a": 1 } },
+        { "name": "pigment/line", "type": "COLOR", "value": { "r": 0.8509804010391235, "g": 0.843137264251709, "b": 0.8156862854957581, "a": 1 } },
+        { "name": "pigment/soft", "type": "COLOR", "value": { "r": 0.9137254953384399, "g": 0.9333333373069763, "b": 0.9843137264251709, "a": 1 } }
+      ]
+    },
+    {
+      "name": "LedgerLens / semantic",
+      "vars": [
+        { "name": "color/paper", "type": "COLOR", "alias": "pigment/paper", "scopes": ["FRAME_FILL", "SHAPE_FILL", "TEXT_FILL"] },
+        { "name": "color/surface", "type": "COLOR", "alias": "pigment/surface", "scopes": ["FRAME_FILL", "SHAPE_FILL", "TEXT_FILL"] },
+        { "name": "color/ink", "type": "COLOR", "alias": "pigment/ink", "scopes": ["FRAME_FILL", "SHAPE_FILL", "TEXT_FILL"] },
+        { "name": "color/muted", "type": "COLOR", "alias": "pigment/muted", "scopes": ["FRAME_FILL", "SHAPE_FILL", "TEXT_FILL"] },
+        { "name": "color/blue", "type": "COLOR", "alias": "pigment/blue", "scopes": ["FRAME_FILL", "SHAPE_FILL", "TEXT_FILL"] },
+        { "name": "color/orange", "type": "COLOR", "alias": "pigment/orange", "scopes": ["FRAME_FILL", "SHAPE_FILL", "TEXT_FILL"] },
+        { "name": "color/line", "type": "COLOR", "alias": "pigment/line", "scopes": ["STROKE_COLOR"] },
+        { "name": "color/soft", "type": "COLOR", "alias": "pigment/soft", "scopes": ["FRAME_FILL", "SHAPE_FILL", "TEXT_FILL"] },
+        { "name": "space-16", "type": "FLOAT", "value": 16, "scopes": ["GAP"] },
+        { "name": "space-24", "type": "FLOAT", "value": 24, "scopes": ["GAP"] },
+        { "name": "space-32", "type": "FLOAT", "value": 32, "scopes": ["GAP"] },
+        { "name": "radius", "type": "FLOAT", "value": 4, "scopes": ["CORNER_RADIUS"] }
+      ]
+    }
+  ],
+  "textStyles": [
+    { "name": "LedgerLens/title", "family": "Geist", "weight": 500, "size": 62, "lineHeightPercent": 125 },
+    { "name": "LedgerLens/heading", "family": "Geist", "weight": 500, "size": 30, "lineHeightPercent": 125 },
+    { "name": "LedgerLens/body", "family": "Geist", "weight": 400, "size": 20, "lineHeightPercent": 125 },
+    { "name": "LedgerLens/label", "family": "Geist Mono", "weight": 400, "size": 15, "lineHeightPercent": 125 }
+  ]
+}
