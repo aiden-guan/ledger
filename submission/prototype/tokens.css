@@ -1,0 +1,12 @@
+/* Exported from LedgerLens Figma semantic variables. */
+:root {
+  --paper: #f6f4ee;
+  --surface: #fafaf8;
+  --ink: #111111;
+  --muted: #62625c;
+  --blue: #1662e6;
+  --orange: #a7470e;
+  --line: #d9d7d0;
+  --soft: #e9eefb;
+  --space-16:16px; --space-24:24px; --space-32:32px; --radius:4px;
+}

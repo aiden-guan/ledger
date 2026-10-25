@@ -1,0 +1,147 @@
+{
+  "leaks": [
+    {
+      "n": "01",
+      "kind": "Paid twice",
+      "subject": "Summit Packaging Supply",
+      "amount": "$1,058",
+      "cents": 105800,
+      "once": true,
+      "evidence": [
+        "$1,058 paid on 2026-09-02 and $1,058 on 2026-09-07",
+        "Scored 1.00 against a 0.70 threshold"
+      ]
+    },
+    {
+      "n": "02",
+      "kind": "Margin slipping",
+      "subject": "Alpine Insulated Bottle 32oz",
+      "amount": "$1,872",
+      "cents": 187200,
+      "once": false,
+      "evidence": [
+        "Cascade Drinkware Co. raised the unit cost from $22 to $29 effective 2026-07-19",
+        "Gross margin fell from 55.1% to 40.8%",
+        "3 competitors list between $59 and $64 (median $62)"
+      ]
+    },
+    {
+      "n": "03",
+      "kind": "Underpriced",
+      "subject": "Trail Daypack 24L",
+      "amount": "$756",
+      "cents": 75600,
+      "once": false,
+      "evidence": [
+        "3 competitors list between $92 and $99 (median $96)",
+        "Northbound Outfitters lists a comparable product at $92",
+        "Granite Peak Gear lists a comparable product at $96"
+      ]
+    },
+    {
+      "n": "04",
+      "kind": "Price creep",
+      "subject": "Relay Inbox",
+      "amount": "$600",
+      "cents": 60000,
+      "once": false,
+      "evidence": [
+        "6 monthly charges detected from bank descriptors grouped as \"relay inbox\"",
+        "The charge rose from $69 to $119 starting 2026-07-27",
+        "At the current price this costs $1,428 a year"
+      ]
+    }
+  ],
+  "totalAnnual": "$4,286",
+  "recurringAnnual": "$3,228",
+  "oneTime": "$1,058",
+  "totalCents": 428600,
+  "axes": {
+    "x": [
+      {
+        "at": 0.0438,
+        "label": "May"
+      },
+      {
+        "at": 0.2088,
+        "label": "Jun"
+      },
+      {
+        "at": 0.3685,
+        "label": "Jul"
+      },
+      {
+        "at": 0.5335,
+        "label": "Aug"
+      },
+      {
+        "at": 0.6986,
+        "label": "Sep"
+      },
+      {
+        "at": 0.8583,
+        "label": "Oct"
+      }
+    ],
+    "y": [
+      {
+        "at": 0.5501,
+        "label": "$100"
+      },
+      {
+        "at": 0.1267,
+        "label": "$1k"
+      }
+    ]
+  },
+  "market": {
+    "product": "Alpine Insulated Bottle 32oz",
+    "ours": 49,
+    "competitors": [
+      {
+        "name": "Ridgeline",
+        "price": 59
+      },
+      {
+        "name": "Northbound",
+        "price": 62
+      },
+      {
+        "name": "Granite Peak",
+        "price": 64
+      }
+    ]
+  },
+  "duplicate": {
+    "vendor": "Summit Packaging Supply",
+    "invoice": "INV-20418",
+    "amount": "1,058",
+    "cents": 105800,
+    "dates": [
+      "09-02",
+      "09-07"
+    ],
+    "gapDays": 5,
+    "confidence": "0.97"
+  },
+  "fix": {
+    "product": "Trail Daypack 24L",
+    "from": "$79",
+    "to": "$86",
+    "annual": "$756"
+  },
+  "stats": {
+    "days": 182,
+    "sales": 985,
+    "transactions": 202,
+    "costs": 20,
+    "competitors": 4,
+    "records": 1187
+  },
+  "provenance": {
+    "mode": "fixture",
+    "anchor": "2026-10-24",
+    "source": "lib/landing/data.ts → runDemoOffline → finance engine",
+    "recordsAreFictional": true
+  }
+}

@@ -1,0 +1,121 @@
+1
+00:00:00,200 --> 00:00:07,154
+LedgerLens helps a small business find where money is slipping
+away, inspect the evidence, and prepare a fix. This
+
+2
+00:00:07,154 --> 00:00:13,376
+walkthrough shows the reconstructed Figma prototype. The full
+working application and its source code are linked in
+
+3
+00:00:13,376 --> 00:00:14,474
+the submission deck.
+
+4
+00:00:15,074 --> 00:00:21,923
+The demo company is Acme Outdoor. It is fictional. LedgerLens's
+existing finance engine identifies four
+
+5
+00:00:21,923 --> 00:00:28,772
+opportunities from eleven hundred and eighty-seven bank and sales
+records: a duplicate payment, margin erosion,
+
+6
+00:00:28,772 --> 00:00:35,165
+underpricing, and a subscription increase. Together, they
+represent four thousand, two hundred and eighty-six
+
+7
+00:00:35,165 --> 00:00:40,644
+dollars in first-year opportunity. This is identified value, not
+money already recovered.
+
+8
+00:00:41,244 --> 00:00:46,827
+Follow the duplicate-payment finding. The evidence view brings the
+two source records together. Both payments are
+
+9
+00:00:46,827 --> 00:00:54,155
+for one thousand and fifty-eight dollars. They share invoice I N
+V, two zero four one eight, and are five days
+
+10
+00:00:54,155 --> 00:01:01,134
+apart. The point is to make a claim inspectable. The owner can
+compare the amount, the invoice reference, and the
+
+11
+00:01:01,134 --> 00:01:03,227
+dates before taking the next step.
+
+12
+00:01:03,827 --> 00:01:10,149
+Next, LedgerLens prepares a refund request using that evidence.
+The draft states what happened and asks the
+
+13
+00:01:10,149 --> 00:01:16,471
+supplier to confirm a duplicate payment. The owner stays in
+control. In this focused prototype, approval only
+
+14
+00:01:16,471 --> 00:01:21,677
+records a local demo decision. It does not send an email or move
+money.
+
+15
+00:01:22,277 --> 00:01:29,619
+The review state records who decided, which invoice supports the
+decision, and what was actually executed. It
+
+16
+00:01:29,619 --> 00:01:36,528
+clearly separates identified opportunity from recovered cash. From
+here, the viewer can reset the prototype, open
+
+17
+00:01:36,528 --> 00:01:40,847
+the full LedgerLens product, or inspect the public source
+repository.
+
+18
+00:01:41,447 --> 00:01:48,678
+The team had used Figma earlier, but those files were lost. This
+session reconstructed and refined the workflow
+
+19
+00:01:48,678 --> 00:01:55,508
+from the existing build. A Figma agent created four native, linked
+Design states, semantic variables, and a
+
+20
+00:01:55,508 --> 00:02:03,141
+reusable button. The actual variables were exported back into the
+runnable prototype's C S S. The tree artwork and
+
+21
+00:02:03,141 --> 00:02:06,355
+financial figures also come from the existing code.
+
+22
+00:02:06,955 --> 00:02:12,909
+Screenshot review caught clipped evidence cards and wrapped
+labels, which were corrected. Checks covered the
+
+23
+00:02:12,909 --> 00:02:20,449
+totals, the approval gate, repeated approval, and reset. A Figma
+Make upload was blocked by the environment, so we
+
+24
+00:02:20,449 --> 00:02:26,403
+retained the native prototype and packaged runnable source. The
+stage log records these limits honestly.
+
+25
+00:02:26,403 --> 00:02:31,562
+LedgerLens: find the leak, show the proof, and keep the owner in
+control.

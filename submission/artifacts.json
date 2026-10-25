@@ -1,0 +1,15 @@
+{
+  "event": "Cal Hacks 13.0 — Figma Idea to Demo",
+  "slides": {"url":"https://www.figma.com/slides/0SCx9Ow10siUfe7D9qrXS6","fileKey":"0SCx9Ow10siUfe7D9qrXS6","slides":12},
+  "design": {"url":"https://www.figma.com/design/9V6201C7apk3N3VObf6opa","fileKey":"9V6201C7apk3N3VObf6opa","states":[{"id":"2:30","name":"Discover"},{"id":"2:61","name":"Prove"},{"id":"2:90","name":"Prepare"},{"id":"2:110","name":"Review"}],"prototypeActions":5},
+  "fullProduct":"https://ledgerlens-mu.vercel.app/overview",
+  "repository":"https://github.com/aiden-guan/ledger",
+  "submissionBranch":"submission/figma-idea-to-demo",
+  "sourceCommit":"c9fa17a463fe76367273c5f6030bc9315e1b170b",
+  "video":"video/ledgerlens-demo.mp4",
+  "history":"Team reports prior Figma use; original files lost. Current artifacts are reconstructed and refined.",
+  "makeImport":"Blocked by network before import; not a completed deliverable",
+  "nativeEmbeds":"Requires Slides editor; hyperlinks are present, live prototype/video embeds not yet inserted",
+  "sharing":"Anyone link access requires owner confirmation",
+  "edu":"Connected plan reports student tier; other team members not verified here"
+}
