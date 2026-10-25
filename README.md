@@ -239,7 +239,7 @@ That pushes the Convex functions and builds Next.js against the production deplo
 
 With `DEMO_MODE=true` (on the Convex deployment) the header shows **Reset demo** and the demo seed and reset functions run. With it off, they refuse with FORBIDDEN and the button is hidden. The suggested demo:
 
-1. Open the landing page and scroll: the tree grows from Acme Outdoor Co.'s books to its findings. Click a finding to grow twigs out to its evidence. Keep scrolling: the tree condenses into a drop that falls into still water, and two koi come up to swim the two loops described below. Keep going and the orange koi swims off down a river, around five rocks, each a problem LedgerLens handles, to a pond in bloom at the bottom of the page. Then click **Open the demo**.
+1. Open the landing page and scroll: the tree grows from Acme Outdoor Co.'s books to its findings. Click a finding to grow twigs out to its evidence. Keep scrolling: two koi swim the two loops described below, then they swim off down a river past the problems LedgerLens handles. A fisherman reels up the blue koi and the orange one chases him down the river, while small cards over the scenes follow one real finding from the engine, the payment to Summit Packaging made twice: the leak ($1,058), the slow loop reading all 1,187 records during the chase, the two bank lines that prove it, and a refund request waiting for approval. The page ends with the koi, their young and the other three findings ($3,228 a year). Then click **Open the demo**.
 2. **Books.** The overview builds a wall of every record of the last six months: one square per sale or bank line, one column per week, money in stacked above the axis and money out below it. Within each week a product's sales always sit in the same place, so one product reads as a band across the weeks. Above the wall, one short line shows the parts of the system (the data, the rules, Apify, Claude and you) and what the part in front is doing; a part lights while it works, a square travels between two parts whenever data passes, and a dashed part is not used on this run. Press → to move between beats (or click them on the left); ↵ always does the beat's one thing.
 3. **Investigate.** Press ↵. A blue beam sweeps the weeks as the engine works through its ten steps (ten squares under the wall fill as they finish, orange when one turns up money). Records it suspects turn pale orange, and each leak lights up in orange as it is measured, with its label and amount: the bottle's sales form an orange band from the week its supplier raised the cost. On the live deployment Claude plans the market research and explains the findings, and Apify fetches the competitor prices in between.
 4. **Decide.** One fix at a time. Every other record fades, leaving the records behind the fix in orange, with the drafted email or price change below and the amount beside it. Press ↵ to approve: the records flip to blue in a wave, left to right. → moves to the next fix. The arithmetic behind each amount and the cash forecast are in the details panel (d).
@@ -269,17 +269,19 @@ To record the walkthrough in one take, press p (or open `/overview?tour`): the o
 
 ## Screenshots
 
-The landing page, fully grown. The roots are the demo company's books, the trunk is the engine, each limb is a finding, and the share of a limb that is orange is proportional to the money it recovers. Scrolling grows the tree; clicking a finding grows twigs out to its evidence. Past the tree, the blue koi swims the fast loop (each payment screened before it posts) and the orange one the slow loop (an investigation every morning):
+The landing page, fully grown. The roots are the demo company's books, the trunk is the engine, each limb is a finding, and the share of a limb that is orange is proportional to the money it recovers. Scrolling grows the tree; clicking a finding grows twigs out to its evidence:
 
 ![Landing page](docs/screenshots/landing.png)
 
-![Landing page, past the tree](docs/screenshots/landing-pond.png)
+Past the tree, the blue koi swims the fast loop (each payment screened before it posts) and the orange one the slow loop (an investigation every morning):
 
-Then the orange koi leaves its loop and swims down a river. Each rock is a problem a small business runs into and LedgerLens handles: fake invoices, paying twice, rising costs, underpricing, and questions about the books. The river ends in a pond that blooms as the koi swims in, and the page ends there:
+![Landing page, the two loops](docs/screenshots/landing-pond.png)
 
-![Landing page, the river](docs/screenshots/landing-river.png)
+Down the river, the story follows the engine's duplicate payment from the leak to the refund. Every figure on the cards comes from an engine run over the demo books at build time:
 
-![Landing page, the pond at the end](docs/screenshots/landing-end.png)
+![Landing page, the leak](docs/screenshots/landing-river.png)
+
+![Landing page, the end](docs/screenshots/landing-end.png)
 
 The overview after an investigation: 1,187 records, one square each and one column per week, with four leaks lit up in orange and labelled with what they cost. These are from the offline replay, which runs on the rules-based narrative and the demo price dataset, so the Apify and Claude parts show as unused (dashed); on the live deployment they light up in their steps:
 
@@ -301,6 +303,6 @@ On a phone:
 
 ![Mobile](docs/screenshots/mobile.png)
 
-The look is a field notebook: warm paper, black ink, hairline rules, and two pigments. Blue is the books; orange is money the engine found. Type is Geist, with anything measured set in Geist Mono. The landing tree is generated from a fixed seed (`lib/landing/tree.ts`) and drawn on a pixel grid on a canvas, one frame per scroll position; the drop, ripples and koi that follow it (`lib/landing/pond.ts`), the river (`lib/landing/river.ts`) and the pond at the end (`lib/landing/garden.ts`) are drawn on the same grid, which goes to the screen as one small image scaled up. The overview's wall is drawn on a canvas too: each square eases to its color on its own clock, so a finding spreads through its records from the one its label points at, and an approval flips them back to blue in a wave. Every figure on the landing page comes from running the engine over the demo books at build time (`lib/landing/data.ts`). The site follows the system light or dark setting and respects reduced motion.
+The look is a field notebook: warm paper, black ink, hairline rules, and two pigments. Blue is the books; orange is money the engine found. Type is Geist, with anything measured set in Geist Mono. The landing tree is generated from a fixed seed (`lib/landing/tree.ts`) and drawn on a pixel grid on a canvas, one frame per scroll position; the drop, ripples and koi that follow it (`lib/landing/pond.ts`), the river (`lib/landing/river.ts`), the pond (`lib/landing/garden.ts`), the fisherman and the chase (`lib/landing/fisher.ts`, `lib/landing/story.ts`) and the reef where the story ends (`lib/landing/reef.ts`) are drawn on the same grid, which goes to the screen as one small image scaled up. The overview's wall is drawn on a canvas too: each square eases to its color on its own clock, so a finding spreads through its records from the one its label points at, and an approval flips them back to blue in a wave. Every figure on the landing page comes from running the engine over the demo books at build time (`lib/landing/data.ts`). The site follows the system light or dark setting and respects reduced motion.
 
 In development, `/preview/overview`, `/preview/findings/0` and `/preview/activity` render the app views from an in-memory engine run, without a Convex deployment (`?approved=1` on a finding shows the approved state). These routes return 404 in production.
