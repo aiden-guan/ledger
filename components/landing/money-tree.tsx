@@ -16,7 +16,7 @@ import { isDark, onThemeChange } from "@/lib/theme";
 import { cn } from "@/lib/utils/cn";
 import { scroller } from "./smooth-scroll";
 import { reefPainter } from "./reef-scene";
-import { type Painter, paintAnger, paintBasket, paintDust, paintFloat, paintLine, paintMan, paintRiver, paintSpear, paintSplash, paintWake, toX, toY } from "./story-scene";
+import { type Painter, paintAnger, paintBasket, paintDust, paintFloat, paintLine, paintMan, paintRiver, paintSpear, paintSplash, paintWake, sheen, toX, toY } from "./story-scene";
 
 /*
  * The landing page is one tree, drawn on a pixel grid. Roots are the books the engine reads, the
@@ -747,6 +747,8 @@ export function MoneyTree({ data }: { data: LandingData }) {
       // The koi, each on its loop. They come up out of the deep a few dots at a time, pale at first.
       // The slow loop's koi may be off down the river.
       let headY = -Infinity;
+      // On the river's blue stipple the blue koi's pale edge and fins would be lost: there they are ink-blue.
+      const crisp = story && v > 0 && sheen(surface.tilt) > 0 ? (ink: number) => (ink === INK.mossLight ? INK.navy : ink) : undefined;
       for (let k = 0; k < 2; k++) {
         const rise = smooth(WATER.koi[k][0], WATER.koi[k][1], w);
         if (rise <= 0) continue;
@@ -791,6 +793,7 @@ export function MoneyTree({ data }: { data: LandingData }) {
           if (story && v > STORY.arrive[1]) [beat, calm] = koiBeat(v, true);
           if (!still) tail0 += (dt / 1000) * beat;
           sp = follow(follower.full.xy, follower.full.at, s, len, 1, tail0, calm, spines[k]);
+          tone = crisp;
         } else sp = swim(loopNow(k), len, BEATS[k], t, spines[k]);
         // Over the reef, above the corals, with a shadow on the floor.
         const reefing = story !== null && v > STORY.young[0];
@@ -1007,7 +1010,7 @@ export function MoneyTree({ data }: { data: LandingData }) {
           const rise = smooth(STORY.fall[1], STORY.fall[1] + 10, v);
           if (!still) tail0 += (dt / 1000) * lerp(2.6, 1.1, smooth(STORY.fall[1], STORY.reunite[1], v));
           const sp = follow(s0.after.xy, s0.after.at, s0.afterAt(v) + onward[0] * s0.home.r, s0.wife, 1, tail0, 1, spines[0]);
-          drawKoi(fish[0], sp, s0.wife, Math.max(0.05, rise), POND.koi(0), 0, 0, 0, false, v > STORY.young[0] ? 32 : 0);
+          drawKoi(fish[0], sp, s0.wife, Math.max(0.05, rise), POND.koi(0), 0, 0, 0, false, v > STORY.young[0] ? 32 : 0, crisp);
           if (v > STORY.young[0]) shadowKoi(sp, s0.wife, smooth(s0.reef.from, s0.reef.full, sp[0]));
         }
         // Their young, each coming up out of the deep a few dots at a time.
@@ -1064,6 +1067,27 @@ export function MoneyTree({ data }: { data: LandingData }) {
         const u = (now - q.at) / 1900;
         ring(sx(q.x), sy(q.z), u * q.size * zoom, surface.tilt, (1 - u) * 0.9, INK.mossLight, POND.water, 4, 5);
         ring(sx(q.x), sy(q.z), Math.max(0, u - 0.18) * q.size * zoom, surface.tilt, (1 - u) * 0.5, INK.dust, POND.water, 3, 6);
+      }
+
+      // In the stippled river, the water is kept clear of the koi all round, so they read against
+      // it: the blue one, blue on blue, by two pixels, the orange one by one.
+      if (story && journey && v > 0 && sheen(surface.tilt) > 0) {
+        const [blue, orange] = [POND.koi(0), POND.koi(1)];
+        for (let cy = 2; cy < gh - 2; cy++) {
+          for (let cx = 2; cx < gw - 2; cx++) {
+            const i = cy * gw + cx;
+            const part = gpart[i];
+            if (!grid[i] || (part !== blue && part !== orange)) continue;
+            const r = part === blue ? 2 : 1;
+            for (let dy = -r; dy <= r; dy++) {
+              for (let dx = -r; dx <= r; dx++) {
+                if (r === 2 && Math.abs(dx) + Math.abs(dy) > 3) continue;
+                const j = i + dy * gw + dx;
+                if (grid[j] && gpart[j] !== blue && gpart[j] !== orange && gprio[j] <= 2) grid[j] = 0;
+              }
+            }
+          }
+        }
       }
 
       // Each cell becomes one pixel of a small image, faded toward the paper where out of focus. It
