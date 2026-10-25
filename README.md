@@ -271,6 +271,10 @@ To record the walkthrough in one take, press p (or open `/overview?tour`): the o
 
 The landing page, fully grown. The roots are the demo company's books, the trunk is the engine, each limb is a finding, and the share of a limb that is orange is proportional to the money it recovers. Scrolling grows the tree; clicking a finding grows twigs out to its evidence:
 
+![Landing page, dark](docs/screenshots/landing-dark.png)
+
+The same view in light mode:
+
 ![Landing page](docs/screenshots/landing.png)
 
 Past the tree, the blue koi swims the fast loop (each payment screened before it posts) and the orange one the slow loop (an investigation every morning):
