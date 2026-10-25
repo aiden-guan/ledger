@@ -1050,15 +1050,24 @@ export function MoneyTree({ data }: { data: LandingData }) {
           if (v > STORY.young[0]) shadowKoi(sp, s0.wife, smooth(s0.reef.from, s0.reef.full, sp[0]));
         }
         // Their young, each coming up out of the deep a few dots at a time.
+        let broodX = -Infinity;
+        let broodY = 0;
+        let born = 0;
         for (let j = 0; j < BROOD; j++) {
           const kid = s0.kids[j];
           const rise = smooth(kid.born, kid.born + 12, v);
           if (rise <= 0) continue;
           const sp = follow(kid.path.xy, kid.path.at, kid.at(v) + onward[1] * s0.home.ring, s0.kid, 1, t * 2.2 + j * 0.9, 1, spines[5 + j]);
           drawKoi(fish[5 + j], sp, s0.kid, rise, POND.garden, j * 1.3, 0, 0, false, 32);
-          if (j === 0) marks.more = [toX(painter, sp[0]) + s0.kid * zoom * 0.6, toY(painter, sp[1])];
+          if (rise > 0.5) {
+            broodX = Math.max(broodX, toX(painter, sp[0]));
+            broodY += toY(painter, sp[1]);
+            born++;
+          }
           shadowKoi(sp, s0.kid, smooth(s0.reef.from, s0.reef.full, sp[0]) * rise);
         }
+        // The note on the young points in from just beyond the furthest of them.
+        if (born) marks.more = [broodX + s0.kid * zoom * 0.9, broodY / born];
         paintSplash(painter, s0.splash[0], s0.splash[1], v - STORY.fall[1], s0.h * 0.07, 14, [0.5, 0.5]);
         paintSplash(painter, s0.hook[0], s0.hook[1], v - STORY.lift[0] - 3, s0.h * 0.05, 13);
 
@@ -1404,7 +1413,8 @@ export function MoneyTree({ data }: { data: LandingData }) {
           edge = 16;
           top = vh - el.offsetHeight - 28;
         }
-        el.style.transform = `translate(${Math.round(left && !narrow ? edge - width : edge)}px, ${Math.round(top)}px)`;
+        // Rising a little into place as it comes in.
+        el.style.transform = `translate(${Math.round(left && !narrow ? edge - width : edge)}px, ${Math.round(top + (1 - vis) * 10)}px)`;
         ctx.globalAlpha = vis;
         const color = pal.inks[n.key === "leak" ? INK.moss : INK.fruit];
         const cx = Math.floor(ax / cell);
