@@ -16,7 +16,7 @@ import { isDark, onThemeChange } from "@/lib/theme";
 import { cn } from "@/lib/utils/cn";
 import { scroller } from "./smooth-scroll";
 import { reefPainter } from "./reef-scene";
-import { type Painter, paintAnger, paintBasket, paintFloat, paintLine, paintMan, paintRiver, paintSpear, paintSplash, toX, toY } from "./story-scene";
+import { type Painter, paintAnger, paintBasket, paintDust, paintFloat, paintLine, paintMan, paintRiver, paintSpear, paintSplash, paintWake, toX, toY } from "./story-scene";
 
 /*
  * The landing page is one tree, drawn on a pixel grid. Roots are the books the engine reads, the
@@ -928,6 +928,18 @@ export function MoneyTree({ data }: { data: LandingData }) {
         }
         paintRiver(painter, s0);
         if (v > STORY.young[1]) paintReef(painter, s0);
+        // The orange koi's wake as it goes after him, as strong as it has been swimming lately, for
+        // its pace across the screen.
+        if (v > STORY.rage[1] && v < STORY.reunite[0] + 12) {
+          const across = (gw * cell) / surface.zoom;
+          let hard = 0;
+          for (let j = 0; j < 4; j++) {
+            const pace = (s0.orangeAt(v - j * 2 + 1) - s0.orangeAt(v - j * 2 - 1)) / 2;
+            hard = Math.max(hard, smooth(across * 0.002, across * 0.006, pace) * (1 - j / 4));
+          }
+          paintWake(painter, journey.full, journey.way.end + s0.orangeAt(v), s0.koi, hard);
+        }
+        paintDust(painter, s0, v);
         const man = manAt(s0, v);
         const drawn = paintMan(painter, s0, man);
         const hS = s0.h * surface.lift * zoom;

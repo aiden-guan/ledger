@@ -5,9 +5,9 @@
  * the page hands over, which knows where the plane is on screen this frame.
  */
 
-import { type Cell, type Drawn, figure, spearCells } from "@/lib/landing/fisher";
+import { type Cell, type Drawn, figure, spearCells, stride } from "@/lib/landing/fisher";
 import { bayer, hash2 } from "@/lib/landing/pond";
-import { type Man, STORY, type Story, farBank, nearBank, spearAt, spearHits } from "@/lib/landing/story";
+import { type Man, STORY, type Story, farBank, nearBank, pointAt, spearAt, spearHits } from "@/lib/landing/story";
 import { INK, mulberry32 } from "@/lib/landing/tree";
 
 export interface Painter {
@@ -602,6 +602,121 @@ export function paintSpear(p: Painter, s: Story, k: number, v: number) {
         put(cx, cy - 1, p.shade(INK.moss), p.part, 16);
       }
     }
+  }
+}
+
+/**
+ * The wake of a koi swimming hard just under the surface: two broken lines opening into a V behind
+ * it. Each crest stays where the koi left it and spreads out from there, so the V lies in the water
+ * while the koi swims on. `s` is how far along `way` its head is, and `strength` how hard it has
+ * been going lately, from 0 to 1.
+ */
+export function paintWake(p: Painter, way: { xy: Float64Array; at: Float64Array }, s: number, len: number, strength: number) {
+  if (strength <= 0.02) return;
+  const { cell, put } = p;
+  // From beside its fins, back as far as it has the strength for, in a ripple that keeps its place
+  // in the water.
+  const from = len * 0.55;
+  const reach = len * lerp(1.3, 2.8, strength);
+  const crest = len * 0.3;
+  for (let b = from; b < reach; b += len * 0.02) {
+    const at = s - b;
+    if (at < 0) break;
+    const [x, y, dx, dy] = pointAt(way, at);
+    const u = (b - from) / (reach - from);
+    const w = len * 0.2 + (b - from) * 0.32 + Math.sin((at / crest) * Math.PI * 2) * len * 0.025;
+    for (const side of [-1, 1]) {
+      const cx = Math.floor(toX(p, x - dy * w * side) / cell);
+      const cy = Math.floor(toY(p, y + dx * w * side) / cell);
+      if (bayer(cx, cy) + 0.5 > (1 - smooth(0.5, 1, u)) * 2 * strength) continue;
+      // A line through a clear channel in the stippled water, the channel narrowing as it goes.
+      const clear = u < 0.4 ? 2 : 1;
+      for (let j = 1; j <= clear; j++) {
+        foam(p, cx, cy - j, 2);
+        foam(p, cx, cy + j, 2);
+      }
+      put(cx, cy, p.shade(u < 0.5 ? INK.moss : INK.mossLight), p.part, 3);
+    }
+  }
+}
+
+/**
+ * A puff of dust, `R` cells across from its middle at (cx, cy) on screen: three round lobes with a
+ * flat foot, shaded underneath, and losing pixels as it thins to `gone`.
+ */
+function puff(p: Painter, cx0: number, cy0: number, R: number, gone: number, seed: number, z: number) {
+  const LOBES = [
+    [-0.5, 0.05, 0.7],
+    [0.4, 0, 0.78],
+    [-0.05, -0.45, 0.62],
+  ];
+  const inside = (i: number, j: number) => j < R * 0.4 && LOBES.some(([lx, ly, lr]) => (i - lx * R) ** 2 + (j - ly * R) ** 2 < (lr * R) ** 2);
+  const r = Math.ceil(R * 1.3);
+  for (let j = -r; j <= r; j++) {
+    for (let i = -r; i <= r; i++) {
+      if (!inside(i, j)) continue;
+      // Pixels drop out as it thins, the same ones however it moves.
+      if (hash2(i * 7 + seed, j * 13 - seed) < gone) continue;
+      const cx = cx0 + i;
+      const cy = cy0 + j;
+      // Pale grey, shaded underneath a shade darker.
+      const under = j > R * 0.1 && bayer(i + 64, j + 64) < (j / R - 0.1) * 1.2 - 0.35;
+      p.put(cx, cy, p.stone(under ? INK.bark : INK.dust), p.part, z);
+    }
+  }
+}
+
+/**
+ * Dust kicked up behind him as he runs, a puff where each foot pushes off, rising, drifting back and
+ * breaking up; and a cloud along the ground where he lands when he trips.
+ */
+export function paintDust(p: Painter, s: Story, v: number) {
+  const run = smooth(STORY.run[0], STORY.run[0] + 10, v);
+  if (run <= 0 || v > STORY.trip[1] + 30) return;
+  const { cell } = p;
+  const S = p.surface;
+  const size = (s.h * S.lift * S.zoom) / cell;
+  const ground = (x: number) => toY(p, farBank(s, x) - s.path, s.bank) / cell;
+  // When he was at x: his x only ever grows, so halve the way to it.
+  const when = (x: number) => {
+    let [lo, hi] = [STORY.run[0] - 10, v];
+    for (let i = 0; i < 18; i++) {
+      const mid = (lo + hi) / 2;
+      if (s.manX(mid) < x) lo = mid;
+      else hi = mid;
+    }
+    return hi;
+  };
+  const LIFE = 13;
+  const step = s.h * stride(1) * 0.5;
+  const x = s.manX(v);
+  const last = Math.floor((x - s.stand[0]) / step - 0.75);
+  for (let n = last; n > last - 4; n--) {
+    // Pushed off three quarters of a step after the foot came down, from just behind him.
+    const at = s.stand[0] + (n + 0.75) * step;
+    const born = when(at);
+    if (born < STORY.run[0] + 2 || born > STORY.trip[0] + 2) continue;
+    const age = (v - born) / LIFE;
+    if (age < 0 || age >= 1) continue;
+    const back = at - s.h * (0.3 + age * 0.25);
+    const R = size * lerp(0.05, 0.11, Math.sqrt(age)) * lerp(0.5, 1, smooth(STORY.run[0], STORY.run[0] + 10, born));
+    puff(p, Math.round(toX(p, back) / cell), Math.round(ground(back) - R * 0.4 - size * age * 0.1), R, smooth(0.4, 1, age), n * 31, 18);
+  }
+  // Down on the path, flat out: dust thrown up at his feet and past his head, and over his back.
+  const hit = STORY.trip[0] + 8;
+  const age = (v - hit) / 22;
+  if (age > 0 && age < 1) {
+    const CLOUD = [
+      [-0.12, -0.25, 0, 0.13],
+      [1.08, 0.3, 0, 0.14],
+      [0.35, -0.05, 0.16, 0.1],
+      [0.72, 0.1, 0.2, 0.11],
+    ];
+    CLOUD.forEach(([at, out, up, big], k) => {
+      const off = s.h * (at + out * age * 0.6);
+      const R = size * lerp(0.04, big, Math.sqrt(age));
+      puff(p, Math.round(toX(p, x + off) / cell), Math.round(ground(x + off) - R * 0.4 - size * (up + age * 0.08)), R, smooth(0.35, 1, age + k * 0.04), 900 + k * 17, 18);
+    });
   }
 }
 

@@ -678,8 +678,10 @@ export function layStory(o: StoryInput): Story {
   const across = (cx: number) => ({ x: cx, y: fb(standX) + (0.06 * vh) / (tilt * zoom), zoom, tilt });
   const jetty = across(standX - W * (narrow ? 0.18 : 0.12));
   const follow = (v: number) => {
-    const between = (manX(v) + koiX(v)) / 2;
-    return across(Math.max(jetty.x, between + W * (narrow ? 0.02 : 0.04)));
+    const between = (manX(v) + koiX(v)) / 2 + W * (narrow ? 0.02 : 0.04);
+    // On a narrow screen the two of them may not fit when he falls: then keep to where she goes in.
+    const fall = Math.max(between, splash[0] + h * 0.25 - W * 0.5);
+    return across(Math.max(jetty.x, lerp(between, fall, smooth(STORY.trip[0] - 10, STORY.trip[0] + 4, v))));
   };
   const close = { x: reunion.x, y: reunion.y, zoom: narrow ? 1.05 : 0.95, tilt: flat };
   const overhead = { x: reunion.x, y: reunion.y, zoom: zr, tilt: flat };
