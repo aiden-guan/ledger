@@ -260,9 +260,10 @@ export function paintFloat(p: Painter, x: number, y: number) {
 }
 
 /**
- * Water thrown up where something goes in at (x, y) on the plane, `age` story-vh after: a crown of
- * drops flung up and out (more of them the way it was going), a column that jumps up behind it and
- * falls back, and rings spreading on the surface.
+ * Water thrown up where something goes in at (x, y) on the plane, `age` story-vh after: for a
+ * moment a dark hole, then a crown of water standing up round it whose rim breaks into drops,
+ * spray flung up and out (more of it the way it was going), a column that jumps up once the hole
+ * closes and falls back, and rings spreading on the surface.
  */
 export function paintSplash(p: Painter, x: number, y: number, age: number, size: number, salt: number, dir: [number, number] = [0, 0], z = 45) {
   if (age < 0 || age > 26) return;
@@ -270,12 +271,52 @@ export function paintSplash(p: Painter, x: number, y: number, age: number, size:
   const S = p.surface;
   const rnd = mulberry32(salt);
   const u = age / 26;
-  const drops = 26;
+  const cx0 = Math.floor(toX(p, x) / cell);
+  // The hole, open for a moment.
+  const hole = age < 3 ? Math.sin((Math.PI * age) / 3) * size * 0.7 : 0;
+  if (hole > 0) {
+    const r = Math.ceil((hole * S.zoom) / cell);
+    const cy0 = Math.floor(toY(p, y) / cell);
+    for (let j = -r; j <= r; j++) {
+      for (let i = -r; i <= r; i++) {
+        const e = Math.hypot(i / r, j / Math.max(1, r * S.tilt));
+        if (e <= 0.75) put(cx0 + i, cy0 + j, p.shade(INK.navy), p.part, z - 8);
+        else if (e <= 1) put(cx0 + i, cy0 + j, p.shade(INK.moss), p.part, z - 8);
+      }
+    }
+  }
+  // The crown: a wall of water round the hole, up and out and back down, its rim breaking into drops.
+  const crown = 16;
+  const c0 = age / 9;
+  if (c0 > 0 && c0 < 1) {
+    for (let j = 0; j < crown; j++) {
+      const a = ((j + rnd() * 0.5) / crown) * Math.PI * 2;
+      const lean = 1 + 0.6 * (Math.cos(a) * dir[0] + Math.sin(a) * dir[1]);
+      const r = size * (0.55 + c0 * 1.1) * lean;
+      const tall = size * (1.4 + rnd() * 0.9) * Math.sin(Math.PI * Math.min(1, c0 * 1.25)) * lean;
+      const wx = x + Math.cos(a) * r;
+      const wy = y + Math.sin(a) * r;
+      const front = Math.sin(a) > 0;
+      const sx = Math.floor(toX(p, wx) / cell);
+      const top = Math.floor(toY(p, wy, tall) / cell);
+      const foot = Math.floor(toY(p, wy, 0) / cell);
+      // The wall, thin and clear, and its rim.
+      for (let cy = top + 1; cy <= foot; cy++) if ((cy + j) % 2 === 0 || cy - top < 2) put(sx, cy, p.shade(INK.mossLight), p.part, front ? z - 1 : z - 10);
+      put(sx, top, p.shade(INK.moss), p.part, front ? z : z - 9);
+      // The rim lets go of a drop as the wall falls.
+      if (c0 > 0.45) {
+        const k = (c0 - 0.45) / 0.55;
+        put(sx + Math.round(Math.cos(a) * k * 2), Math.floor(toY(p, wy, tall + size * (0.5 + rnd()) * k * (1 - k) * 2) / cell), p.shade(INK.moss), p.part, front ? z : z - 9);
+      }
+    }
+  }
+  // Spray.
+  const drops = 22;
   for (let i = 0; i < drops; i++) {
     const a = rnd() * Math.PI * 2;
-    const out = size * (0.5 + rnd() * 1.4) * (1 + 0.8 * (Math.cos(a) * dir[0] + Math.sin(a) * dir[1]));
-    const up = size * (1.2 + rnd() * 2.2);
-    const life = 0.35 + rnd() * 0.35;
+    const out = size * (0.6 + rnd() * 1.6) * (1 + 0.8 * (Math.cos(a) * dir[0] + Math.sin(a) * dir[1]));
+    const up = size * (1.6 + rnd() * 2.4);
+    const life = 0.3 + rnd() * 0.3;
     const k = u / life;
     if (k >= 1) continue;
     const dx = Math.cos(a) * out * k;
@@ -288,17 +329,17 @@ export function paintSplash(p: Painter, x: number, y: number, age: number, size:
     if (k < 0.4) put(Math.floor(sx / cell), Math.floor(sy / cell) + 1, p.shade(INK.mossLight), p.part, z - 1);
   }
   // The column: up once the hole closes, then back down.
-  const c = (age - 2.5) / 9;
+  const c = (age - 3) / 9;
   if (c > 0 && c < 1) {
-    const tall = Math.sin(Math.PI * c) * size * 2.6;
-    const cx = Math.floor(toX(p, x) / cell);
+    const tall = Math.sin(Math.PI * c) * size * 2.8;
     for (let h = 0; h < tall; h += cell / (S.lift * S.zoom || 1)) {
       const cy = Math.floor(toY(p, y, h) / cell);
-      put(cx, cy, p.shade(h > tall - size * 0.6 ? INK.mossLight : INK.moss), p.part, z);
-      if (h < tall * 0.4) put(cx + 1, cy, p.shade(INK.mossLight), p.part, z - 1);
+      put(cx0, cy, p.shade(h > tall - size * 0.6 ? INK.mossLight : INK.moss), p.part, z);
+      if (h < tall * 0.5) put(cx0 + 1, cy, p.shade(INK.mossLight), p.part, z - 1);
+      if (h < tall * 0.2) put(cx0 - 1, cy, p.shade(INK.mossLight), p.part, z - 1);
     }
     // A drop breaks off the top as it falls back.
-    if (c > 0.55) put(cx, Math.floor(toY(p, y, tall + size * (c - 0.55) * 2) / cell) - 1, p.shade(INK.moss), p.part, z);
+    if (c > 0.55) put(cx0, Math.floor(toY(p, y, tall + size * (c - 0.55) * 2) / cell) - 1, p.shade(INK.moss), p.part, z);
   }
   // Rings on the water.
   for (let k = 0; k < 3; k++) {
@@ -309,8 +350,9 @@ export function paintSplash(p: Painter, x: number, y: number, age: number, size:
 }
 
 /**
- * Spear k at story time v: in the air with its shadow on the water, or in the water, where what
- * is under the surface is seen bent toward us and paler, with a trail of bubbles going up.
+ * Spear k at story time v: in the air, its path traced behind it and its shadow on the water, or
+ * in the water, where what is under the surface is seen bent toward us and fading with depth, the
+ * shaft above shivering as it stops, and a trail of bubbles going up.
  */
 export function paintSpear(p: Painter, s: Story, k: number, v: number) {
   const st = spearAt(s, k, v);
@@ -320,23 +362,48 @@ export function paintSpear(p: Painter, s: Story, k: number, v: number) {
   const L = s.h * 0.95;
   const [px, py, pz] = st.p;
   const [dx, dy, dz] = st.d;
-  // Screen ends of the spear: tip at p, butt back along d. Below the surface, depth shows at three quarters (the water bends it).
+  // Screen px of a point; below the surface, depth shows at three quarters (the water bends it).
   const scr = (x: number, y: number, z: number): [number, number] => [toX(p, x), toY(p, y, z < 0 ? z * 0.75 : z)];
-  const n = Math.ceil((L * S.zoom) / (cell * 0.6));
   const tipUnder = pz < 0;
+  // Its way through the air, traced behind the head and fading.
+  if (!tipUnder) {
+    for (let j = 1; j <= 14; j++) {
+      const was = spearAt(s, k, v - j * 0.45);
+      if (!was || was.p[2] < 0) break;
+      const [sx, sy] = scr(...was.p);
+      const cx = Math.floor(sx / cell);
+      const cy = Math.floor(sy / cell);
+      if (j % 2 === 0 && bayer(cx, cy) < 0.5 - j / 14) put(cx, cy, p.stone(INK.dust), p.part, 6);
+    }
+  }
+  // Once in, the part still out of the water shivers, less and less.
+  const under = st.under;
+  const shiver = under > 0 ? Math.exp(-under / 2.4) * Math.sin(under * 2.6) * s.h * 0.07 * S.zoom : 0;
+  const [tx0, ty0] = scr(px, py, pz);
+  const [bx0, by0] = scr(px - dx * L, py - dy * L, pz - dz * L);
+  const sl = Math.hypot(tx0 - bx0, ty0 - by0) || 1;
+  const nx = -(ty0 - by0) / sl;
+  const ny = (tx0 - bx0) / sl;
+  const n = Math.ceil((L * S.zoom) / (cell * 0.6));
   for (let i = 0; i <= n; i++) {
     const u = i / n;
     const x = px - dx * L * (1 - u);
     const y = py - dy * L * (1 - u);
     const z = pz - dz * L * (1 - u);
-    const [sx, sy] = scr(x, y, z);
+    let [sx, sy] = scr(x, y, z);
+    if (z > 0 && shiver !== 0) {
+      const up = clamp01(z / Math.max(1e-6, -dz * L + pz));
+      sx += nx * shiver * up;
+      sy += ny * shiver * up;
+    }
     const cx = Math.floor(sx / cell);
     const cy = Math.floor(sy / cell);
     const tip = u > 0.86;
     if (z < 0) {
-      // Under the water: dimmer, and broken where the light plays on the surface.
-      if (bayer(cx, cy) > 0.25) continue;
-      put(cx, cy, p.shade(tip ? INK.navy : INK.mossLight), p.part, 15);
+      // Under the water: bluer and dimmer the deeper it goes.
+      const deep = clamp01(-z / (s.h * 0.45));
+      if (bayer(cx, cy) > 0.5 - deep * 0.8) continue;
+      put(cx, cy, p.shade(tip ? INK.navy : deep < 0.3 ? INK.moss : INK.mossLight), p.part, 15);
     } else {
       const ink = tip ? (p.night ? INK.shadow : INK.navy) : u > 0.82 ? INK.rust : i % 5 === 0 ? INK.rust : INK.bark;
       put(cx, cy, p.stone(ink), p.part, 40);
@@ -348,37 +415,39 @@ export function paintSpear(p: Painter, s: Story, k: number, v: number) {
       if (bayer(Math.floor(hx / cell), Math.floor(hy / cell)) < -0.05) put(Math.floor(hx / cell), Math.floor(hy / cell), p.shade(INK.navy), p.part, 3);
     }
   }
-  // Barbs at the tip, while it is still in the air.
+  // Barbs at the head, while it is still in the air.
   if (!tipUnder) {
-    for (const cell2 of spearCells(Math.atan2(scr(px, py, pz)[1] - scr(px - dx, py - dy, pz - dz)[1], scr(px, py, pz)[0] - scr(px - dx, py - dy, pz - dz)[0]), 3, p.night).slice(-2)) {
-      const [sx, sy] = scr(px, py, pz);
-      put(Math.floor(sx / cell) + cell2.x, Math.floor(sy / cell) + cell2.y, cell2.ink, p.part, 40);
-    }
+    for (const c of spearCells(Math.atan2(ty0 - by0, tx0 - bx0), 3, p.night).slice(-2)) put(Math.floor(tx0 / cell) + c.x, Math.floor(ty0 / cell) + c.y, c.ink, p.part, 40);
   }
-  if (st.under <= 0) return;
+  if (under <= 0) return;
   const hit = spearHits(k);
   const [tx, ty] = s.spears[k];
-  paintSplash(p, tx, ty, v - hit, s.h * 0.06, 400 + k * 17, [dx, dy]);
+  paintSplash(p, tx, ty, v - hit, s.h * 0.085, 400 + k * 17, [dx, dy]);
   // Where the shaft stands out of the water, the water rings it.
   const ringR = (s.h * 0.035 + Math.sin(p.t * 3 + k) * s.h * 0.008) * S.zoom;
   p.ring(toX(p, tx - dx * s.h * 0.02), toY(p, ty - dy * s.h * 0.02), ringR, S.tilt, 0.8, p.shade(INK.mossLight), p.part, 5, 60 + k);
-  // Bubbles from the tip up to the surface.
+  // Bubbles off the shaft, up to the surface: a rush as it goes in, then a few.
   const rnd = mulberry32(700 + k);
-  for (let i = 0; i < 9; i++) {
-    const born = rnd() * 9;
-    const life = 4 + rnd() * 5;
-    const age = st.under - born;
+  for (let i = 0; i < 16; i++) {
+    const born = i < 10 ? rnd() * 2.5 : 2.5 + rnd() * 10;
+    const life = 3 + rnd() * 4;
+    const age = under - born;
+    const at = 0.25 + rnd() * 0.75;
     if (age < 0 || age > life) continue;
     const u = age / life;
-    const z = pz * (1 - u);
+    const z0 = pz * at;
+    const z = z0 * (1 - u);
     const wob = Math.sin(age * 2 + i) * s.h * 0.02;
-    const [bx, by] = scr(px - dx * s.h * 0.1 * rnd() + wob, py, z);
+    const [bx, by] = scr(px - dx * (1 - at) * s.h * 0.4 + wob, py - dy * (1 - at) * s.h * 0.4, z);
     const cx = Math.floor(bx / cell);
     const cy = Math.floor(by / cell);
-    if (u > 0.92) p.ring(bx, toY(p, py, 0), cell * 1.5, S.tilt, 0.6, p.shade(INK.mossLight), p.part, 5, 80 + i);
+    if (u > 0.9) p.ring(bx, toY(p, py, 0), cell * 1.5, S.tilt, 0.6, p.shade(INK.mossLight), p.part, 5, 80 + i);
     else {
       put(cx, cy, p.shade(INK.mossLight), p.part, 16);
-      if (i % 3 === 0) put(cx + 1, cy, p.shade(INK.mossLight), p.part, 16);
+      if (i % 3 === 0) {
+        put(cx + 1, cy, p.shade(INK.mossLight), p.part, 16);
+        put(cx, cy - 1, p.shade(INK.moss), p.part, 16);
+      }
     }
   }
 }

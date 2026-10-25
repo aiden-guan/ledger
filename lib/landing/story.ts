@@ -74,9 +74,9 @@ export const BROOD = 7;
 /** How long each throw takes, from turning round to walking on. */
 export const THROW = 34;
 /** Within a throw: drawn back by, let go at, and in the water at. */
-const AIM = 14;
-const LET_GO = 17;
-const HITS = 23;
+const AIM = 11;
+const LET_GO = 13;
+const HITS = 24;
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 export const smooth = (a: number, b: number, v: number) => {
@@ -335,17 +335,19 @@ export function layStory(o: StoryInput): Story {
   const tripX = manX(STORY.trip[0]) + h * 0.32;
   const trip: Pt = [tripX, fb(tripX) - path];
 
-  // The orange koi in the river after him: it gains while he stops, and never quite catches him.
+  // The orange koi in the river after him: it gains while he stops, though warily while he turns
+  // to throw, and never quite catches him.
   const lane = (x: number) => fb(x) + width * 0.17;
-  const gapMin = h * 0.62;
+  const gapMin = h * 1.25;
   const koiXs: number[] = [];
   let kx = liftAt[0];
   for (let i = 0; i < xs.length; i++) {
     const v = i * DV;
     if (v > STORY.rage[1]) {
       const run = smooth(STORY.run[0], STORY.run[1], v);
-      const swim = walkSpeed * lerp(1.18, 2.6 * 1.04, run);
-      kx = Math.min(kx + swim * DV, xs[i] - gapMin * lerp(1, 0.75, run));
+      let swim = walkSpeed * lerp(1.18, 2.6 * 1.04, run);
+      for (const a of STORY.spears) swim *= 1 - 0.65 * smooth(a - 2, a + 4, v) * (1 - smooth(a + HITS, a + HITS + 6, v));
+      kx = Math.min(kx + swim * DV, xs[i] - gapMin * lerp(1, 0.6, run));
       kx = Math.max(kx, liftAt[0]);
     }
     koiXs.push(kx);
@@ -367,7 +369,7 @@ export function layStory(o: StoryInput): Story {
     STORY.spears.forEach((a, k) => {
       const at = a + HITS;
       const u = (v - (at - 3)) / 7;
-      if (u > -1 && u < 1) d += Math.cos((u * Math.PI) / 2) ** 2 * width * (0.16 + k * 0.03) * (k % 2 ? 0.8 : 1);
+      if (u > -1 && u < 1) d += Math.cos((u * Math.PI) / 2) ** 2 * width * (0.2 + k * 0.04) * (k % 2 ? 0.8 : 1);
     });
     return d;
   };
@@ -819,7 +821,7 @@ export function manAt(s: Story, v: number): Man {
       const still = mix(POSES.rest, mix(POSES.aim, POSES.hurl, hurl), draw);
       pose = mix(pose, mix(still, POSES.rest, back), smooth(-2, 3, t) * (1 - smooth(THROW - 5, THROW, t)));
       gear.quiver = 3 - k - (t > 6 ? 1 : 0);
-      if (t > 6 && t < LET_GO) gear.spear = lerp(0.35, -0.25, hurl);
+      if (t > 5 && t < LET_GO) gear.spear = lerp(0.35, -0.25, hurl);
     });
     if (v > STORY.spears[STORY.spears.length - 1] + THROW) gear.quiver = 0;
     // Tripped: pitching forward over the rock, then flat out.
@@ -842,16 +844,17 @@ export function spearAt(s: Story, k: number, v: number): { p: [number, number, n
   const from: [number, number, number] = [s.manX(a + LET_GO) - s.h * 0.3, farBank(s, s.manX(a + LET_GO)) - s.path, s.bank + s.h * 0.78];
   const [tx, ty] = s.spears[k];
   const fly = HITS - LET_GO;
+  // Thrown up and out, higher the further it has to go.
+  const arc = Math.hypot(tx - from[0], ty - from[1]) * 0.3 + s.h * 0.15;
   if (t < HITS) {
     const u = (t - LET_GO) / fly;
-    const arc = s.h * 0.5;
     const p: [number, number, number] = [lerp(from[0], tx, u), lerp(from[1], ty, u), lerp(from[2], 0, u) + arc * 4 * u * (1 - u)];
     const d: [number, number, number] = [tx - from[0], ty - from[1], -from[2] + arc * 4 * (1 - 2 * u)];
     const l = Math.hypot(...d);
     return { p, d: [d[0] / l, d[1] / l, d[2] / l], under: 0 };
   }
-  // In the water: on along the way it came, slowing fast, a little steeper.
-  const d0: [number, number, number] = [tx - from[0], ty - from[1], -from[2] - s.h * 0.5 * 2];
+  // In the water: on along the way it came in, slowing fast, a little steeper.
+  const d0: [number, number, number] = [tx - from[0], ty - from[1], -from[2] - arc * 4];
   const l = Math.hypot(...d0);
   const d: [number, number, number] = [d0[0] / l, d0[1] / l, (d0[2] / l) * 1.15];
   const go = s.h * 0.55 * (1 - Math.exp(-(t - HITS) / 2.2));

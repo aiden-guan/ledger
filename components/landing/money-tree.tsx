@@ -6,6 +6,7 @@ import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { format } from "@/lib/finance/money";
 import type { LandingData } from "@/lib/landing/data";
+import { HOLD_VH, REST_VH, RIVER_AT, RIVER_VH, STORY_AT, TRAVEL_VH, TREE_VH, WATER_VH } from "@/lib/landing/clocks";
 import { type Garden, flowerInk, layGarden, padInk } from "@/lib/landing/garden";
 import { DROP_HEART, FINS, GLINT, type KoiDot, type Loop, POND, SPINE, TAIL, TIP, WATER, bayer, condense, dropInk, follow, hash2, headAngle, koiDots, koiHalf, loopAt, ripples, splash, swim } from "@/lib/landing/pond";
 import { type River, SHADOW, type Way, arcs, banks, centre, currents, layRiver, pace, riverWay, rockEdge, rockInk, sample, track, wayOut } from "@/lib/landing/river";
@@ -30,18 +31,6 @@ import { type Painter, paintAnger, paintBasket, paintFloat, paintLine, paintMan,
  * there (lib/landing/story.ts) until the page ends.
  */
 
-// Scroll distances, in viewport heights: the tree grows, holds a moment, then the water clock runs
-// (w goes from 0 to 1 over WATER_VH) until the koi leaves, and the river takes the rest.
-const TREE_VH = 430;
-const HOLD_VH = 30;
-const WATER_VH = 300;
-const RIVER_AT = TREE_VH + HOLD_VH + WATER.leave * WATER_VH;
-const RIVER_VH = 380;
-/** The last of the river's clock, with the koi at rest in the pond while it blooms. */
-const REST_VH = 45;
-/** Then the rest of the story (see STORY), from the koi coming to rest. */
-const STORY_AT = RIVER_AT + RIVER_VH - REST_VH;
-const TRAVEL_VH = STORY_AT + STORY.end;
 const START = CLOCK.roots[1];
 const INKS = 13;
 /** Scroll px between entries of the koi's pace and camera tables. */
