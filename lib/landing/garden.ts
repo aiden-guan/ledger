@@ -259,7 +259,7 @@ const BUSHES: { light: Ink; mid: Ink; dark: Ink; eye: Ink }[] = [
  * round its heart with shadow between them, lit from the upper left like a dome. Each pixel's `h`
  * is when, as the bush opens, it shows: the mound grows out from its middle, hearts last.
  */
-function bushDots(kind: number, r: number, cell: number, rnd: () => number) {
+export function bushDots(kind: number, r: number, cell: number, rnd: () => number) {
   const tone = BUSHES[kind];
   const dots: Bush["dots"] = [];
   const s1 = rnd() * 6.3;
