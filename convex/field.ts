@@ -15,7 +15,8 @@ export const get = query({
     const completed = await ctx.db
       .query("investigations")
       .withIndex("by_org_status", (q) => q.eq("organizationId", org._id).eq("status", "COMPLETED"))
-      .collect();
+      .collect()
+      .then((rows) => rows.filter((inv) => inv.marketProfile !== "retail"));
     const latest = completed.reduce<Doc<"investigations"> | null>((best, inv) => (!best || (inv.completedAt ?? 0) > (best.completedAt ?? 0) ? inv : best), null);
 
     const [products, sales, costs, transactions] = await Promise.all([

@@ -25,7 +25,9 @@ export const get = query({
       ctx.db
         .query("investigations")
         .withIndex("by_org_status", (q) => q.eq("organizationId", org._id).eq("status", status))
-        .collect();
+        .collect()
+        // The market page's retail checks have their own view; the overview shows full investigations.
+        .then((rows) => rows.filter((inv) => inv.marketProfile !== "retail"));
 
     const completed = await byStatus("COMPLETED");
     const latest = completed.reduce<Doc<"investigations"> | null>((best, inv) => (!best || (inv.completedAt ?? 0) > (best.completedAt ?? 0) ? inv : best), null);
