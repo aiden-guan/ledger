@@ -70,6 +70,7 @@ export function paintRiver(p: Painter, s: Story) {
   const glow = sheen(S.tilt);
   const part = p.part;
   const ink = (k: number) => p.shade(k);
+  if (glow > 0) paintLand(p, s, glow);
   // Column by column: where the banks and the jetty are on screen.
   for (let cx = 0; cx < gw; cx++) {
     const wx = fromX(p, (cx + 0.5) * cell);
@@ -132,18 +133,13 @@ export function paintRiver(p: Painter, s: Story) {
       const sway = Math.sin(t * 1.3 + cx * 0.37) > 0.6 ? 1 : 0;
       for (let k = 1; k <= tall; k++) put(cx + (k === tall ? sway : 0), f0 - k, k === tall ? INK.gold : hash2(cx, k) < 0.5 ? INK.bark : INK.gold, part, 6);
     }
-    // The path along the bank: trodden earth, a dot here and there.
-    const p0 = Math.floor(toY(p, fy - s.path * 2.2, s.bank) / cell);
-    const p1 = Math.floor(toY(p, fy - s.path * 0.2, s.bank) / cell);
-    for (let cy = Math.max(0, p0); cy <= Math.min(gh - 1, p1); cy++) if (hash2(cx * 5 + 1, cy * 3) < 0.12) put(cx, cy, p.stone(INK.dust), part, 3);
 
     // The near bank: a lip of earth and grass, the land rising toward us.
     const n0 = Math.floor(yNear / cell);
     if (n0 >= 0 && n0 < gh) {
-      put(cx, n0, p.stone(INK.bark), part, 5);
+      put(cx, n0, hash2(cx, 21) < 0.6 ? INK.rust : p.stone(INK.bark), part, 5);
       if (hash2(cx, 23) < 0.7) put(cx, n0 - 1, hash2(cx, 29) < 0.5 ? INK.gold : p.stone(INK.bark), part, 6);
       if (hash2(cx, 31) < 0.35) for (let k = 2; k < 2 + hash2(cx, 37) * 4; k++) put(cx + (Math.sin(t + cx) > 0.7 && k > 3 ? 1 : 0), n0 - k, k > 4 ? INK.gold : p.stone(INK.bark), part, 6);
-      for (let cy = n0 + 1; cy < Math.min(gh, n0 + 3); cy++) if (hash2(cx, cy) < 0.25) put(cx, cy, p.stone(INK.dust), part, 3);
     }
   }
   paintStream(p, s);
@@ -162,6 +158,144 @@ export function paintRiver(p: Painter, s: Story) {
       put(cx, cy, p.stone(lit > 0.35 ? INK.dust : lit > -0.35 ? INK.bark : INK.navy), part, 9);
     }
   }
+}
+
+/**
+ * The land either side of the river. On the far side, past the pond's garden: the path he walks,
+ * and behind it rows of lavender back to the hedge, starting just past where he stands so the sky
+ * behind the koi stays clear as he lifts her; short dry grass along the path and up to the garden.
+ * On the near side, dry grass coming toward us, taller the nearer it is. All of it leans with the
+ * wind. Fireflies at night, and by day a few butterflies.
+ */
+function paintLand(p: Painter, s: Story, glow: number) {
+  const { cell, gw, gh, t, put } = p;
+  const x0 = fromX(p, -cell * 10);
+  const x1 = fromX(p, (gw + 10) * cell);
+  const wind = (x: number) => Math.sin(t * 1.3 - x * 0.006) + 0.4 * Math.sin(t * 2.9 - x * 0.017);
+  const fieldX = s.stand[0] + s.h * 0.3;
+  const rows = { from: s.h * 0.5, gap: s.h * 0.19, to: s.h * 1.85 };
+  // The lavender, row behind row back to the hedge, each a run of bushes with a gap now and then,
+  // fainter further back. The rows nearest the path begin past the jetty, leaving a clearing where
+  // he fishes, so nothing is behind the koi as he lifts her.
+  const B = s.h * 0.085;
+  const R = (B * 0.62 * p.surface.zoom) / cell;
+  for (let k = 0; rows.from + k * rows.gap < rows.to; k++) {
+    const d = rows.from + k * rows.gap;
+    const keep = glow * (1 - (0.55 * (d - rows.from)) / (rows.to - rows.from));
+    const start = (d > s.h * 1.05 ? s.stand[0] - s.h : fieldX) + hash2(k, 5) * s.h * 0.3;
+    for (let cx = 0; cx < gw; cx++) {
+      const x = fromX(p, (cx + 0.5) * cell);
+      const f = x / B + (k & 1) * 0.5;
+      const i = Math.floor(f);
+      if (i * B < start || noise(i * 0.37 + k * 1.7, k * 0.61) < 0.2) continue;
+      const y = farBank(s, x) - d;
+      if (offLand(s, x, y)) continue;
+      const u = (f - i) * 2 - 1;
+      const tall = R * (1.1 + 0.25 * hash2(i, k)) * Math.sqrt(Math.max(0, 1 - u * u * 0.8));
+      const base = toY(p, y, s.bank) / cell;
+      const foot = base + R * 0.35;
+      if (foot < 0 || base - tall > gh + 1) continue;
+      lavender(p, cx, base - tall, foot, -u, keep, wind(x));
+    }
+  }
+  // Dry grass: a verge of it between the path and the field, all along the bank.
+  const gx = s.h * 0.04;
+  const gd = s.h * 0.05;
+  for (let i = Math.floor(x0 / gx); i <= Math.ceil(x1 / gx); i++) {
+    for (let j = 0; s.path * 2.5 + j * gd < rows.from - gd * 0.4; j++) {
+      const x = (i + hash2(i, j * 3 + 1)) * gx;
+      const y = farBank(s, x) - s.path * 2.5 - (j + hash2(i * 5, j)) * gd;
+      if (offLand(s, x, y) || hash2(i * 7 + 5, j * 11) > glow * 0.5 * smooth(0.25, 0.55, noise(x / 160 + 9, j * 0.7 + 2))) continue;
+      const sy = toY(p, y, s.bank);
+      if (sy < -cell * 8 || sy > (gh + 8) * cell) continue;
+      tuft(p, Math.floor(toX(p, x) / cell), Math.floor(sy / cell), 3 + hash2(i, j * 13) * 3, wind(x));
+    }
+  }
+  // On the near side, coming toward us, taller and thicker the nearer it is.
+  const nx = s.h * 0.032;
+  for (let i = Math.floor(x0 / nx); i <= Math.ceil(x1 / nx); i++) {
+    for (let j = 0; j < 40; j++) {
+      const x = (i + hash2(i, j * 3 + 3)) * nx;
+      const d = (j + hash2(i * 5 + 1, j)) * gd;
+      const sy = toY(p, nearBank(s, x) + s.h * 0.04 + d, s.bank);
+      if (sy > (gh + 12) * cell) break;
+      const near = smooth(0, s.h * 0.8, d);
+      const keep = (0.12 + 0.33 * near) * smooth(0.22, 0.55, noise(x / 180 + 3, d / 70 + 7));
+      if (hash2(i * 7 + 6, j * 11) > keep * glow) continue;
+      tuft(p, Math.floor(toX(p, x) / cell), Math.floor(sy / cell), lerp(2, 8, near) * (0.75 + 0.5 * hash2(i * 3, j * 9 + 1)), wind(x));
+    }
+  }
+  // Life over the land: fireflies at night, butterflies by day, each keeping to its patch.
+  const step = s.h * 0.45;
+  for (let k = Math.floor(x0 / step) - 1; k <= Math.ceil(x1 / step) + 1; k++) {
+    if (hash2(k, 71) > 0.45) continue;
+    const side = hash2(k, 73) < 0.75 ? -1 : 1;
+    const x = (k + hash2(k, 79)) * step + Math.sin(t * 0.31 + k * 1.7) * s.h * 0.25;
+    const base = side < 0 ? farBank(s, x) - s.path * 2.6 - hash2(k, 83) * s.h * 1.1 : nearBank(s, x) + s.h * (0.15 + hash2(k, 83) * 0.5);
+    const y = base + Math.sin(t * 0.43 + k * 2.3) * s.h * 0.12;
+    const z = s.bank + s.h * (0.18 + 0.2 * hash2(k, 89) + 0.06 * Math.sin(t * 0.9 + k));
+    if (side < 0 && offLand(s, x, y)) continue;
+    const cx = Math.floor(toX(p, x) / cell);
+    const cy = Math.floor(toY(p, y, z) / cell);
+    if (cx < 1 || cy < 1 || cx >= gw - 1 || cy >= gh - 1) continue;
+    if (p.night) {
+      const lit = Math.sin(t * (1.1 + hash2(k, 97)) + k * 3.1);
+      if (lit < -0.2) continue;
+      put(cx, cy, INK.gold, p.part, 12);
+      if (lit > 0.5) for (const [i, j] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) put(cx + i, cy + j, INK.fruitPale, p.part, 11);
+    } else {
+      const ink = [INK.petal, INK.violet, INK.gold, INK.fruit][Math.floor(hash2(k, 101) * 4)];
+      const open = Math.sin(t * 14 + k * 5) > 0;
+      put(cx, cy, p.stone(INK.bark), p.part, 12);
+      put(cx - 1, cy - (open ? 1 : 0), ink, p.part, 12);
+      put(cx + 1, cy - (open ? 1 : 0), ink, p.part, 12);
+    }
+  }
+}
+
+/**
+ * One column of a row of lavender, from its top to its foot in pixels: stippled thicker toward
+ * the shade below (on a dark page, toward the light above), a flower spike standing proud of it
+ * every other column and leaning with the wind, thinned to `keep`. `lit` is how far this column
+ * is round toward the light on the left, -1 to 1.
+ */
+function lavender(p: Painter, cx: number, top: number, foot: number, lit: number, keep: number, wind: number) {
+  const c0 = Math.floor(top);
+  const c1 = Math.floor(foot);
+  if ((cx & 1) === 0 && hash2(cx, c0) < 0.7 * keep) p.put(cx + (Math.abs(wind) > 0.8 ? Math.sign(wind) : 0), c0 - 1, INK.violet, p.part, 2);
+  if (hash2(cx * 3, c0) < keep + 0.1) p.put(cx, c0, INK.violet, p.part, 2);
+  for (let cy = Math.max(0, c0 + 1); cy <= Math.min(p.gh - 1, c1); cy++) {
+    const v = (cy - top) / Math.max(1, foot - top);
+    const b = bayer(cx, cy);
+    const dense = p.night ? 0.85 - 0.4 * v + 0.1 * lit : 0.4 + 0.5 * v - 0.12 * lit;
+    if (b + 0.5 > dense * keep) continue;
+    p.put(cx, cy, v > 0.78 && b < (p.night ? -0.25 : 0.1) ? p.shade(INK.navy) : INK.violet, p.part, 2);
+  }
+}
+
+/**
+ * A tuft of dry grass standing on (cx, cy), `tall` pixels: two or three blades a pixel apart, the
+ * middle one tallest, the outer ones bending away from it, all leaning with the wind.
+ */
+function tuft(p: Painter, cx: number, cy: number, tall: number, wind: number) {
+  const tip = p.night ? INK.gold : INK.fruitPale;
+  const body = p.night ? p.stone(INK.bark) : INK.gold;
+  const three = tall > 4.5;
+  for (const o of three ? [-2, 0, 2] : [-1, 1]) {
+    const n = Math.max(2, Math.round(tall * (o === 0 ? 1 : 0.55 + 0.3 * hash2(cx + o, cy))));
+    for (let r = 0; r < n; r++) {
+      const u = r / n;
+      const x = cx + o + Math.round(Math.sign(o) * u * u * 1.6 + wind * 0.6 * u * u * (n / 5));
+      p.put(x, cy - r, r === 0 && o === 0 ? p.stone(INK.rust) : u > 0.6 ? tip : body, p.part, 2);
+    }
+  }
+}
+
+/** Whether a point on the far land is on the pond or in the stream. */
+function offLand(s: Story, x: number, y: number) {
+  if (x > s.outlet.shore[0] && x < s.outlet.shore[1] && y < s.outlet.top + s.koi * 0.25) return true;
+  const e = s.stream(y);
+  return !!e && x > e[0] - s.koi * 0.3 && x < e[1] + s.koi * 0.3;
 }
 
 /**
