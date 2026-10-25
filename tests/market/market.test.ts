@@ -79,6 +79,11 @@ describe("real market checks", () => {
     expect(
       finding?.evidence.filter((e) => e.sourceType === "apify"),
     ).toHaveLength(3);
+    // The overview keeps showing the full investigation; retail checks live on the market page.
+    const overview = await t.query(api.dashboard.get, {});
+    expect(overview?.latest?.id).not.toBe(id);
+    expect(overview?.latest?.totalRecoveryAnnualCents).toBe(428600);
+    expect((await t.query(api.field.get, {}))?.investigation?.id).toBe(overview?.latest?.id);
     await expect(t.mutation(api.market.start, {})).rejects.toThrow(/minute/);
     vi.advanceTimersByTime(61_000);
     vi.mocked(pricing.getCompetitorPricing).mockRejectedValueOnce(
@@ -90,6 +95,7 @@ describe("real market checks", () => {
     expect(failed?.latest?.status).toBe("FAILED");
     expect(failed?.capture?.runId).toBe(first?.capture?.runId);
     expect(failed?.quotes).toEqual(first?.quotes);
+    expect((await t.query(api.dashboard.get, {}))?.lastFailure).toBeNull();
   });
 
   it("fails closed rather than inventing live retail quotes", async () => {
