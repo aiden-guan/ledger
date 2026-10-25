@@ -201,10 +201,10 @@ function paintStream(p: Painter, s: Story) {
   }
   // The pond's shore either side of it, its line moving a little this way and that.
   const e0 = s.stream(top)!;
-  const reach = s.koi * 9;
+  const [x0, x1] = s.outlet.shore;
   let n = 0;
-  for (let x = e0[0] - gapAt; x > e0[0] - reach; x -= gapAt) dot(x, top - s.koi * 0.05 * (1 - Math.cos((x - e0[0]) / 60)), n++, 0);
-  for (let x = e0[1] + gapAt; x < e0[1] + reach; x += gapAt) dot(x, top - s.koi * 0.05 * (1 - Math.cos((x - e0[1]) / 70)), n++, 0);
+  for (let x = e0[0] - gapAt; x > x0; x -= gapAt) dot(x, top - s.koi * 0.05 * (1 - Math.cos((x - e0[0]) / 60)), n++, 0);
+  for (let x = e0[1] + gapAt; x < x1; x += gapAt) dot(x, top - s.koi * 0.05 * (1 - Math.cos((x - e0[1]) / 70)), n++, 0);
   // The current, running down it.
   const L = bottom - top;
   const count = Math.round(L / 10);

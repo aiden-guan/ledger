@@ -219,8 +219,8 @@ export interface Story {
   width: number;
   bank: number;
   waves: [number, number, number, number];
-  /** The stream the pond drains down to the river, from its foot at the pond (top) to the river's far bank (bottom), `half` wide either side of x at its narrowest. */
-  outlet: { x: number; top: number; bottom: number; half: number };
+  /** The stream the pond drains down to the river, from its foot at the pond (top) to the river's far bank (bottom), `half` wide either side of x at its narrowest; and how far the pond's shore runs either way along its foot. */
+  outlet: { x: number; top: number; bottom: number; half: number; shore: [number, number] };
   /** The stream's banks at y on the plane, left and right, or null off its ends. */
   stream: (y: number) => [number, number] | null;
   /** The jetty along the far bank: from x0 to x1, out over the water to `front`. */
@@ -309,7 +309,7 @@ export function layStory(o: StoryInput): Story {
   // The stream the pond drains down to the river: drifting a little to the right as it goes, its
   // banks flaring open into the pond at the top, as the river's do where it comes in above, and
   // into the river below.
-  const outlet = { x: outletX, top: yB, bottom: fb(outletX), half: o.koi * 0.55 };
+  const outlet = { x: outletX, top: yB, bottom: fb(outletX), half: o.koi * 0.55, shore: [-vw * 0.55, vw * 0.55] as [number, number] };
   const stream = (y: number): [number, number] | null => {
     if (y < outlet.top || y > outlet.bottom + bank) return null;
     const u = (y - outlet.top) / (outlet.bottom - outlet.top);
